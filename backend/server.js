@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS - COMPLETE WhatsApp Clone Backend
+// SERVER.JS - WhatsApp Clone Backend
 // ============================================
 
 // Load environment variables
@@ -9,6 +9,7 @@ require('dotenv').config({ path: './.env' });
 // DEBUG - Check environment variables
 // ============================================
 console.log('🔍 ===== ENVIRONMENT VARIABLES CHECK =====');
+console.log('📋 PORT from env:', process.env.PORT || 'Not set');
 console.log('📋 MONGO_URI:', process.env.MONGO_URI ? '✅ Loaded' : '❌ NOT FOUND');
 console.log('📋 JWT_SECRET:', process.env.JWT_SECRET ? '✅ Loaded' : '❌ NOT FOUND');
 console.log('📋 TWILIO_ACCOUNT_SID:', process.env.TWILIO_ACCOUNT_SID ? '✅ Loaded' : '❌ NOT FOUND');
@@ -47,15 +48,15 @@ const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/whatsapp-clone';
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
 
+console.log('🚀 ===== SERVER STARTING =====');
+console.log('📋 PORT:', PORT);
+console.log('📋 MONGO_URI:', MONGO_URI ? '✅ Loaded' : '❌ NOT FOUND');
+console.log('📋 CLIENT_URL:', CLIENT_URL);
+
 // ============================================
 // CORS CONFIGURATION
 // ============================================
 const allowedOrigins = CLIENT_URL.split(',').map((o) => o.trim());
-
-console.log('🚀 ===== SERVER STARTING =====');
-console.log('📋 PORT:', PORT);
-console.log('📋 Allowed Origins:', allowedOrigins);
-console.log('📋 MONGO_URI:', MONGO_URI ? '✅ Loaded' : '❌ NOT FOUND');
 
 app.use(
   cors({
@@ -125,10 +126,7 @@ mongoose
   })
   .catch((err) => {
     console.error('❌ MongoDB connection error:', err.message);
-    console.error('❌ Please check:');
-    console.error('   1. MongoDB service is running (net start MongoDB)');
-    console.error('   2. MONGO_URI in .env file is correct');
-    console.error('❌ Server will not start without database connection.');
+    console.error('❌ Please check your MONGO_URI');
     process.exit(1);
   });
 
