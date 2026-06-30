@@ -281,3 +281,24 @@ body {
     min-height: 56px !important;
   }
 }
+/* ============================================
+   CHAT HEADER FIX - ALWAYS VISIBLE ON MOBILE
+   ============================================ */
+@media (max-width: 768px) {
+  .bg-\[\#202c33\].px-2.py-2 {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 56px !important;
+    max-height: 64px !important;
+  }
+  
+  /* Ensure header doesn't get hidden by anything */
+  .chat-header-container {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    position: relative !important;
+    z-index: 20 !important;
+  }
+}

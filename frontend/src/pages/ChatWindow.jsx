@@ -363,8 +363,8 @@ export default function ChatWindow() {
 
       {/* Main Chat Area */}
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== HEADER - Always Visible ===== */}
-        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-10">
+        {/* ===== HEADER - Always Visible (No conditional rendering) ===== */}
+        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-10 border-b border-[#2f3b41] flex-shrink-0">
           {/* Left: Back + Avatar + Name */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -407,7 +407,7 @@ export default function ChatWindow() {
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
-          <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54]">
+          <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54] flex-shrink-0">
             <div className="flex-1">
               <p className="text-xs text-whatsapp-green font-medium">
                 Replying to {replyTo.sender === user.id ? 'yourself' : otherUser?.name}
@@ -578,7 +578,7 @@ export default function ChatWindow() {
         </div>
 
         {/* ===== INPUT ===== */}
-        <form onSubmit={handleSend} className="bg-[#202c33] px-3 py-2 flex items-center gap-2">
+        <form onSubmit={handleSend} className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
             ref={fileInputRef}

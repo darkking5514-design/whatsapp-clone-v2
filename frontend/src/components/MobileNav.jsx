@@ -10,6 +10,7 @@ export default function MobileNav() {
                   location.pathname.includes('/call/') ||
                   location.pathname === '/login';
 
+  // Don't render anything if hidden
   if (hideNav) {
     return null;
   }
