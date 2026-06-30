@@ -363,60 +363,68 @@ export default function ChatWindow() {
 
       {/* Main Chat Area */}
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full relative">
-        {/* ===== HEADER - STICKY ON TOP (FIXED FOR MOBILE) ===== */}
+        {/* ===== HEADER - FIXED ON TOP (BULLETPROOF) ===== */}
         <div 
-          className="sticky top-0 z-[9999] bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] border-b border-[#2f3b41] flex-shrink-0"
           style={{
-            position: 'sticky',
+            position: 'fixed',
             top: 0,
-            zIndex: 9999,
+            left: 0,
+            right: 0,
+            zIndex: 999999,
             backgroundColor: '#202c33',
             display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '8px 12px',
+            minHeight: '56px',
+            borderBottom: '1px solid #2f3b41',
             visibility: 'visible',
             opacity: 1,
-            minHeight: '56px',
             width: '100%',
+            boxSizing: 'border-box',
           }}
         >
           {/* Left: Back + Avatar + Name */}
-          <div className="flex items-center gap-2 min-w-0 flex-1">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
             <button
               onClick={() => navigate('/chats')}
-              className="text-gray-300 md:hidden p-1 active:bg-[#2a3942] rounded-full transition-colors"
+              className="text-gray-300 md:hidden p-1 active:bg-[#2a3942] rounded-full"
+              style={{ background: 'transparent', border: 'none', color: '#aebac1', padding: '4px' }}
             >
               <ArrowLeft size={22} />
             </button>
-            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0 text-sm md:text-base">
-              {otherUser?.name?.[0]?.toUpperCase() || otherUser?.username?.[0]?.toUpperCase() || '?'}
+            <div className="w-9 h-9 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0">
+              {otherUser?.name?.[0]?.toUpperCase() || '?'}
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-white font-medium truncate text-sm md:text-base">
-                {otherUser?.name || otherUser?.username || 'Loading...'}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ color: 'white', fontWeight: 500, fontSize: '14px', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {otherUser?.name || 'Loading...'}
               </p>
-              <p className="text-xs text-gray-400 truncate">
+              <p style={{ fontSize: '12px', color: '#9aa3a8', margin: 0 }}>
                 {isTyping ? '✍️ typing...' : isOnline ? '🟢 Online' : '⚪ Offline'}
               </p>
             </div>
           </div>
 
           {/* Right: Call Buttons */}
-          <div className="flex items-center gap-1 md:gap-2 text-gray-300 shrink-0">
+          <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
             <button
               onClick={() => startCall('audio')}
-              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors hover:bg-[#2a3942]"
-              title="Voice call"
+              style={{ background: 'transparent', border: 'none', color: '#aebac1', padding: '8px' }}
             >
-              <Phone size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
+              <Phone size={18} />
             </button>
             <button
               onClick={() => startCall('video')}
-              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors hover:bg-[#2a3942]"
-              title="Video call"
+              style={{ background: 'transparent', border: 'none', color: '#aebac1', padding: '8px' }}
             >
-              <Video size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
+              <Video size={18} />
             </button>
           </div>
         </div>
+
+        {/* Spacer to push content below fixed header */}
+        <div style={{ height: '56px', flexShrink: 0 }} />
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
