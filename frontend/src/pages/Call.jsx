@@ -4,7 +4,7 @@ import { Mic, MicOff, Phone, Video, VideoOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
-// Use multiple STUN servers for better connectivity
+// Use multiple STUN + a free TURN server for better connectivity
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -12,6 +12,22 @@ const ICE_SERVERS = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
+    // Free TURN server (for testing) – remove in production or use your own
+    {
+      urls: 'turn:openrelay.metered.ca:80',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    },
+    {
+      urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+      username: 'openrelayproject',
+      credential: 'openrelayproject'
+    }
   ],
 };
 
@@ -29,6 +45,7 @@ export default function Call() {
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(callType !== 'video');
   const [remoteConnected, setRemoteConnected] = useState(false);
+  const [iceState, setIceState] = useState('new');
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -57,15 +74,34 @@ export default function Call() {
         const pc = new RTCPeerConnection(ICE_SERVERS);
         pcRef.current = pc;
 
-        // Add tracks
-        stream.getTracks().forEach((track) => pc.addTrack(track, stream));
+        // Add tracks with proper direction
+        stream.getTracks().forEach((track) => {
+          pc.addTrack(track, stream);
+        });
+
+        // Also use transceivers for better control
+        if (callType === 'video') {
+          // Ensure video transceiver exists with 'sendrecv'
+          const videoTransceiver = pc.getTransceivers().find(t => t.receiver.track.kind === 'video');
+          if (videoTransceiver) {
+            videoTransceiver.direction = 'sendrecv';
+          }
+        }
+        const audioTransceiver = pc.getTransceivers().find(t => t.receiver.track.kind === 'audio');
+        if (audioTransceiver) {
+          audioTransceiver.direction = 'sendrecv';
+        }
 
         // Handle incoming remote stream
         pc.ontrack = (event) => {
+          console.log('📡 Remote track received:', event.track.kind);
           setRemoteConnected(true);
           setCallStatus('Connected');
           if (remoteVideoRef.current) {
-            remoteVideoRef.current.srcObject = event.streams[0];
+            // If multiple streams, use first one
+            const remoteStream = event.streams[0];
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.play().catch(e => console.warn('Play error:', e));
           }
         };
 
@@ -81,73 +117,59 @@ export default function Call() {
         };
 
         // Connection state monitoring
-        pc.onconnectionstatechange = () => {
-          console.log('Connection state:', pc.connectionState);
-          if (['disconnected', 'failed', 'closed'].includes(pc.connectionState)) {
-            if (!endedRef.current) endCall(false);
+        pc.oniceconnectionstatechange = () => {
+          const state = pc.iceConnectionState;
+          setIceState(state);
+          console.log('ICE State:', state);
+          if (state === 'connected' || state === 'completed') {
+            setCallStatus('Connected');
+          } else if (state === 'failed') {
+            setCallStatus('Connection failed');
+            endCall(false);
+          } else if (state === 'disconnected') {
+            setCallStatus('Disconnected');
           }
         };
 
-        // Handle negotiation needed (for renegotiation)
-        pc.onnegotiationneeded = async () => {
-          try {
-            if (isCaller) {
-              const offer = await pc.createOffer();
-              await pc.setLocalDescription(offer);
-              socket?.emit('call_offer', {
-                to: otherUserId,
-                from: user.id,
-                offer,
-                callType,
-                callerName: user.name,
-              });
-            }
-          } catch (err) {
-            console.error('Negotiation error:', err);
-          }
-        };
-
-        // If caller, create offer
+        // Ensure we have local description before sending
         if (isCaller) {
+          // Caller creates offer
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket?.emit('call_offer', {
             to: otherUserId,
             from: user.id,
-            offer,
+            offer: pc.localDescription,
             callType,
             callerName: user.name,
           });
         } else if (incomingOffer) {
-          // If receiver, set remote description from incoming offer
+          // Receiver sets remote description from offer
           await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
-          flushPendingCandidates();
+          // Flush any buffered candidates
+          for (const candidate of pendingCandidatesRef.current) {
+            try {
+              await pc.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (err) {
+              console.warn('Error adding candidate:', err);
+            }
+          }
+          pendingCandidatesRef.current = [];
+          // Create answer
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket?.emit('call_answer', {
             to: otherUserId,
             from: user.id,
-            answer,
+            answer: pc.localDescription,
           });
         }
 
       } catch (err) {
         console.error('Failed to start call:', err);
         setCallStatus('Could not access camera/microphone');
+        alert('Please allow camera and microphone permissions.');
       }
-    }
-
-    async function flushPendingCandidates() {
-      const pc = pcRef.current;
-      if (!pc) return;
-      for (const candidate of pendingCandidatesRef.current) {
-        try {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate));
-        } catch (err) {
-          console.error('Failed to add buffered ICE candidate', err);
-        }
-      }
-      pendingCandidatesRef.current = [];
     }
 
     setup();
@@ -155,17 +177,28 @@ export default function Call() {
     // Socket event handlers
     function onCallAnswer({ from, answer }) {
       if (from !== otherUserId || !pcRef.current) return;
-      pcRef.current.setRemoteDescription(new RTCSessionDescription(answer))
-        .then(() => flushPendingCandidates())
-        .catch((err) => console.error('Set remote description error:', err));
+      const pc = pcRef.current;
+      // Set remote description
+      pc.setRemoteDescription(new RTCSessionDescription(answer))
+        .then(() => {
+          // Add any pending candidates after description set
+          for (const candidate of pendingCandidatesRef.current) {
+            pc.addIceCandidate(new RTCIceCandidate(candidate))
+              .catch(err => console.warn('Failed to add ICE candidate', err));
+          }
+          pendingCandidatesRef.current = [];
+        })
+        .catch(err => console.error('Set remote description error:', err));
     }
 
     function onIceCandidate({ from, candidate }) {
       if (from !== otherUserId) return;
       const pc = pcRef.current;
-      if (pc && pc.remoteDescription && pc.remoteDescription.type) {
+      if (!pc) return;
+      // Add candidate if remote description is set, else buffer
+      if (pc.remoteDescription && pc.remoteDescription.type) {
         pc.addIceCandidate(new RTCIceCandidate(candidate))
-          .catch((err) => console.error('Failed to add ICE candidate', err));
+          .catch(err => console.warn('Error adding candidate', err));
       } else {
         pendingCandidatesRef.current.push(candidate);
       }
@@ -199,7 +232,9 @@ export default function Call() {
   }, []);
 
   function cleanupMedia() {
-    localStreamRef.current?.getTracks().forEach((t) => t.stop());
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(t => t.stop());
+    }
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
@@ -219,7 +254,9 @@ export default function Call() {
   function toggleMute() {
     const stream = localStreamRef.current;
     if (!stream) return;
-    stream.getAudioTracks().forEach((t) => (t.enabled = muted));
+    const audioTracks = stream.getAudioTracks();
+    if (audioTracks.length === 0) return;
+    audioTracks.forEach(t => (t.enabled = muted));
     setMuted(!muted);
   }
 
@@ -228,7 +265,7 @@ export default function Call() {
     if (!stream) return;
     const videoTracks = stream.getVideoTracks();
     if (videoTracks.length === 0) return;
-    videoTracks.forEach((t) => (t.enabled = videoOff));
+    videoTracks.forEach(t => (t.enabled = videoOff));
     setVideoOff(!videoOff);
   }
 
@@ -247,6 +284,7 @@ export default function Call() {
             </div>
             <p className="text-white text-lg">{calleeName || 'User'}</p>
             <p className="text-gray-400 text-sm">{callStatus}</p>
+            <p className="text-gray-500 text-xs">ICE: {iceState}</p>
           </div>
         )}
 
