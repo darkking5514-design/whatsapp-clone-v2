@@ -193,7 +193,6 @@ export default function ChatWindow() {
       ...payload,
     };
 
-    // Add reply info if replying
     if (replyTo) {
       messageData.replyTo = replyTo._id;
     }
@@ -281,7 +280,6 @@ export default function ChatWindow() {
       });
     });
 
-    // API call to forward
     api.post('/messages/forward', {
       messageId: forwardMessage._id,
       receiverIds: selectedUsers,
@@ -300,7 +298,6 @@ export default function ChatWindow() {
   function handleDelete(message, deleteFor) {
     if (!message) return;
 
-    // Send socket event
     socket.emit('delete_message', {
       messageId: message._id,
       deleteFor,
@@ -308,7 +305,6 @@ export default function ChatWindow() {
       receiverId: otherUserId,
     });
 
-    // API call
     api.delete(`/messages/${message._id}?deleteFor=${deleteFor}`)
       .then(() => {
         if (deleteFor === 'everyone') {
@@ -364,28 +360,44 @@ export default function ChatWindow() {
         <Sidebar />
       </div>
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== HEADER ===== */}
-        <div className="bg-[#202c33] px-3 py-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden">
-              <ArrowLeft size={20} />
+        {/* ===== HEADER - Mobile Responsive ===== */}
+        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2">
+          {/* Left: Back + Avatar + Name */}
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <button
+              onClick={() => navigate('/chats')}
+              className="text-gray-300 md:hidden p-1 active:bg-[#2a3942] rounded-full transition-colors"
+            >
+              <ArrowLeft size={22} />
             </button>
-            <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0">
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0 text-sm md:text-base">
               {otherUser?.name?.[0]?.toUpperCase() || '?'}
             </div>
-            <div className="min-w-0">
-              <p className="text-white font-medium truncate">{otherUser?.name || 'Loading...'}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-white font-medium truncate text-sm md:text-base">
+                {otherUser?.name || 'Loading...'}
+              </p>
               <p className="text-xs text-gray-400 truncate">
                 {isTyping ? '✍️ typing...' : isOnline ? '🟢 Online' : '⚪ Offline'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-4 text-gray-300 shrink-0">
-            <button onClick={() => startCall('audio')} title="Voice call">
-              <Phone size={20} />
+
+          {/* Right: Call Buttons - Always Visible */}
+          <div className="flex items-center gap-1 md:gap-2 text-gray-300 shrink-0">
+            <button
+              onClick={() => startCall('audio')}
+              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors"
+              title="Voice call"
+            >
+              <Phone size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
             </button>
-            <button onClick={() => startCall('video')} title="Video call">
-              <Video size={20} />
+            <button
+              onClick={() => startCall('video')}
+              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors"
+              title="Video call"
+            >
+              <Video size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
             </button>
           </div>
         </div>
@@ -413,7 +425,6 @@ export default function ChatWindow() {
             </p>
           )}
           {messages.map((m) => {
-            // Skip deleted messages
             if (m.deleted) {
               return (
                 <div key={m._id} className="flex justify-center">
@@ -425,14 +436,11 @@ export default function ChatWindow() {
             const isSent = m.sender === user.id;
             const isReply = m.replyTo;
             const isForwarded = m.forwarded;
-
-            // Find reply message if exists
             const replyMessage = isReply ? messages.find(msg => msg._id === m.replyTo) : null;
 
             return (
               <div key={m._id} className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}>
                 <div className="relative max-w-[75%]">
-                  {/* Reply Preview */}
                   {isReply && replyMessage && !replyMessage.deleted && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-400">
                       <p className="font-medium text-whatsapp-green">
@@ -444,12 +452,10 @@ export default function ChatWindow() {
                     </div>
                   )}
 
-                  {/* Forwarded Label */}
                   {isForwarded && (
                     <p className="text-[10px] text-gray-400 italic mb-1">Forwarded</p>
                   )}
 
-                  {/* Message Bubble */}
                   <div
                     className={`rounded-lg px-3 py-2 text-sm shadow ${
                       isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
@@ -505,7 +511,6 @@ export default function ChatWindow() {
                     </div>
                   </div>
 
-                  {/* Menu Button */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
                     className="absolute -top-2 -right-2 p-1 bg-[#202c33] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -513,7 +518,6 @@ export default function ChatWindow() {
                     <MoreVertical size={16} className="text-gray-300" />
                   </button>
 
-                  {/* Menu Options */}
                   {showMessageMenu === m._id && (
                     <div className="absolute -top-8 right-6 bg-[#202c33] rounded-lg shadow-lg p-1 z-10 flex gap-1 border border-[#3b4a54]">
                       <button
