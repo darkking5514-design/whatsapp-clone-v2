@@ -356,12 +356,15 @@ export default function ChatWindow() {
 
   return (
     <div className="flex h-screen bg-[#111b21]">
+      {/* Desktop Sidebar */}
       <div className="hidden md:block">
         <Sidebar />
       </div>
+
+      {/* Main Chat Area */}
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== HEADER - Mobile Responsive ===== */}
-        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2">
+        {/* ===== HEADER - Always Visible ===== */}
+        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-10">
           {/* Left: Back + Avatar + Name */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button
@@ -371,11 +374,11 @@ export default function ChatWindow() {
               <ArrowLeft size={22} />
             </button>
             <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0 text-sm md:text-base">
-              {otherUser?.name?.[0]?.toUpperCase() || '?'}
+              {otherUser?.name?.[0]?.toUpperCase() || otherUser?.username?.[0]?.toUpperCase() || '?'}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-white font-medium truncate text-sm md:text-base">
-                {otherUser?.name || 'Loading...'}
+                {otherUser?.name || otherUser?.username || 'Loading...'}
               </p>
               <p className="text-xs text-gray-400 truncate">
                 {isTyping ? '✍️ typing...' : isOnline ? '🟢 Online' : '⚪ Offline'}
@@ -387,14 +390,14 @@ export default function ChatWindow() {
           <div className="flex items-center gap-1 md:gap-2 text-gray-300 shrink-0">
             <button
               onClick={() => startCall('audio')}
-              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors"
+              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors hover:bg-[#2a3942]"
               title="Voice call"
             >
               <Phone size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
             </button>
             <button
               onClick={() => startCall('video')}
-              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors"
+              className="p-2 md:p-2.5 active:bg-[#2a3942] rounded-full transition-colors hover:bg-[#2a3942]"
               title="Video call"
             >
               <Video size={18} className="md:w-5 md:h-5" strokeWidth={1.8} />
@@ -406,7 +409,9 @@ export default function ChatWindow() {
         {replyTo && (
           <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54]">
             <div className="flex-1">
-              <p className="text-xs text-whatsapp-green font-medium">Replying to {replyTo.sender === user.id ? 'yourself' : otherUser?.name}</p>
+              <p className="text-xs text-whatsapp-green font-medium">
+                Replying to {replyTo.sender === user.id ? 'yourself' : otherUser?.name}
+              </p>
               <p className="text-sm text-gray-300 truncate max-w-[200px]">
                 {replyTo.messageType === 'text' ? replyTo.content : '📎 Media'}
               </p>
@@ -511,6 +516,7 @@ export default function ChatWindow() {
                     </div>
                   </div>
 
+                  {/* Three-dot menu */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
                     className="absolute -top-2 -right-2 p-1 bg-[#202c33] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -518,6 +524,7 @@ export default function ChatWindow() {
                     <MoreVertical size={16} className="text-gray-300" />
                   </button>
 
+                  {/* Menu options */}
                   {showMessageMenu === m._id && (
                     <div className="absolute -top-8 right-6 bg-[#202c33] rounded-lg shadow-lg p-1 z-10 flex gap-1 border border-[#3b4a54]">
                       <button
