@@ -188,3 +188,26 @@ body {
     padding-top: max(10px, env(safe-area-inset-top, 10px));
   }
 }
+
+/* ============================================
+   SUPER FINAL FIX - STICKY HEADER
+   ============================================ */
+@media (max-width: 768px) {
+  /* Force the sticky header to always show */
+  .sticky.top-0 {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 9999 !important;
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    min-height: 56px !important;
+    background-color: #202c33 !important;
+    border-bottom: 1px solid #2f3b41 !important;
+  }
+  
+  /* Prevent any overflow hiding */
+  .flex.flex-col.h-screen.bg-whatsapp-chatbg {
+    overflow: hidden !important;
+  }
+}

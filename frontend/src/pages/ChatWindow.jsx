@@ -362,15 +362,20 @@ export default function ChatWindow() {
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== HEADER - ALWAYS VISIBLE ===== */}
+      <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full relative">
+        {/* ===== HEADER - STICKY ON TOP (FIXED FOR MOBILE) ===== */}
         <div 
-          className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-50 border-b border-[#2f3b41] flex-shrink-0 chat-header-force"
-          style={{ 
-            display: 'flex !important', 
-            visibility: 'visible !important', 
-            opacity: '1 !important',
-            minHeight: '56px !important'
+          className="sticky top-0 z-[9999] bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] border-b border-[#2f3b41] flex-shrink-0"
+          style={{
+            position: 'sticky',
+            top: 0,
+            zIndex: 9999,
+            backgroundColor: '#202c33',
+            display: 'flex',
+            visibility: 'visible',
+            opacity: 1,
+            minHeight: '56px',
+            width: '100%',
           }}
         >
           {/* Left: Back + Avatar + Name */}
@@ -394,7 +399,7 @@ export default function ChatWindow() {
             </div>
           </div>
 
-          {/* Right: Call Buttons - Always Visible */}
+          {/* Right: Call Buttons */}
           <div className="flex items-center gap-1 md:gap-2 text-gray-300 shrink-0">
             <button
               onClick={() => startCall('audio')}
