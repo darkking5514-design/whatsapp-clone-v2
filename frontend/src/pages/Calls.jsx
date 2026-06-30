@@ -5,11 +5,9 @@ import api from '../api/axios';
 import { useSocket } from '../context/SocketContext';
 import Sidebar from '../components/Sidebar';
 
-// This is a lightweight "Calls" tab for the test app. Since no call-history
-// model was requested, it simply lets you start a fresh audio/video call
-// with any user. Add a Call model + route later if you want persisted call logs.
 export default function Calls() {
   const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
   const { onlineUsers } = useSocket();
   const navigate = useNavigate();
 
@@ -17,16 +15,20 @@ export default function Calls() {
     async function fetchUsers() {
       try {
         const res = await api.get('/users');
-        setUsers(res.data);
+        setUsers(res.data || []);
       } catch (err) {
-        console.error(err);
+        console.error('Failed to fetch users', err);
+      } finally {
+        setLoading(false);
       }
     }
     fetchUsers();
   }, []);
 
   function call(userId, username, callType) {
-    navigate(`/call/${userId}`, { state: { isCaller: true, callType, calleeName: username } });
+    navigate(`/call/${userId}`, {
+      state: { isCaller: true, callType, calleeName: username },
+    });
   }
 
   return (
@@ -37,35 +39,47 @@ export default function Calls() {
           <h1 className="text-white text-lg font-semibold">Calls</h1>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {users.length === 0 && (
+          {loading && <p className="text-gray-400 text-center mt-6">Loading users...</p>}
+          {!loading && users.length === 0 && (
             <p className="text-gray-400 text-center mt-6">No users to call yet.</p>
           )}
-          {users.map((u) => (
-            <div
-              key={u._id}
-              className="flex items-center justify-between px-4 py-3 border-b border-black/20"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
-                  {u.username[0].toUpperCase()}
+          {users.map((u) => {
+            const isOnline = onlineUsers && onlineUsers[u._id];
+            return (
+              <div
+                key={u._id}
+                className="flex items-center justify-between px-4 py-3 border-b border-black/20"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
+                    {u.name?.[0]?.toUpperCase() || u.username?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div>
+                    <p className="text-white text-sm font-medium">{u.name || u.username}</p>
+                    <p className="text-xs text-gray-400">
+                      {isOnline ? '🟢 Online' : '⚪ Offline'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-white text-sm font-medium">{u.username}</p>
-                  <p className="text-xs text-gray-400">
-                    {onlineUsers[u._id] ? 'Online' : 'Offline'}
-                  </p>
+                <div className="flex items-center gap-4 text-gray-300">
+                  <button
+                    onClick={() => call(u._id, u.name || u.username, 'audio')}
+                    title="Voice call"
+                    className="hover:text-white"
+                  >
+                    <Phone size={20} />
+                  </button>
+                  <button
+                    onClick={() => call(u._id, u.name || u.username, 'video')}
+                    title="Video call"
+                    className="hover:text-white"
+                  >
+                    <Video size={20} />
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-4 text-gray-300">
-                <button onClick={() => call(u._id, u.username, 'audio')} title="Voice call">
-                  <Phone size={20} />
-                </button>
-                <button onClick={() => call(u._id, u.username, 'video')} title="Video call">
-                  <Video size={20} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
