@@ -251,3 +251,16 @@ body {
     padding-top: max(10px, env(safe-area-inset-top, 10px));
   }
 }
+/* Chat Window - Full height without bottom nav */
+@media (max-width: 768px) {
+  .chat-window-mobile {
+    height: 100dvh !important;
+    max-height: 100dvh !important;
+    padding-bottom: 0 !important;
+  }
+  
+  /* Hide bottom nav on chat pages */
+  .hide-nav-on-chat .sidebar-bottom {
+    display: none !important;
+  }
+}

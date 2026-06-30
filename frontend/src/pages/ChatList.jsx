@@ -17,7 +17,7 @@ export default function ChatList() {
   const navigate = useNavigate();
 
   // ============================================
-  // 1. FETCH USERS & LAST MESSAGES
+  // FETCH USERS & LAST MESSAGES
   // ============================================
   useEffect(() => {
     async function fetchUsers() {
@@ -69,12 +69,11 @@ export default function ChatList() {
   }, [user]);
 
   // ============================================
-  // 2. SOCKET - REAL-TIME UNREAD UPDATES
+  // SOCKET - REAL-TIME UNREAD UPDATES
   // ============================================
   useEffect(() => {
     if (!socket || !connected) return;
 
-    // When a new message arrives
     function onReceiveMessage(message) {
       console.log('📩 New message received:', message);
       
@@ -93,10 +92,8 @@ export default function ChatList() {
       }
     }
 
-    // When messages are marked as read
     function onMessagesRead({ by }) {
       console.log('📖 Messages read by:', by);
-      // Clear unread count for this user
       setUnreadCounts(prev => ({
         ...prev,
         [by]: 0
@@ -113,21 +110,18 @@ export default function ChatList() {
   }, [socket, connected, user]);
 
   // ============================================
-  // 3. CLEAR UNREAD WHEN CHAT IS OPENED
+  // CLEAR UNREAD WHEN CHAT IS OPENED
   // ============================================
   function openChat(userId) {
-    // Clear unread count for this user
     setUnreadCounts(prev => ({
       ...prev,
       [userId]: 0
     }));
-    
-    // Navigate to chat
     navigate(`/chat/${userId}`);
   }
 
   // ============================================
-  // 4. SORT USERS BY LAST MESSAGE TIME
+  // SORT USERS BY LAST MESSAGE TIME
   // ============================================
   const sortedUsers = [...users].sort((a, b) => {
     const msgA = lastMessages[a._id];
@@ -139,7 +133,7 @@ export default function ChatList() {
   });
 
   // ============================================
-  // 5. SEARCH FILTER
+  // SEARCH FILTER
   // ============================================
   const filtered = sortedUsers.filter((u) => {
     const name = (u.name || u.username || '').toLowerCase();
@@ -149,7 +143,7 @@ export default function ChatList() {
   });
 
   // ============================================
-  // 6. FORMAT UNREAD COUNT
+  // FORMAT UNREAD COUNT
   // ============================================
   function formatUnreadCount(count) {
     if (!count || count === 0) return null;
@@ -160,7 +154,7 @@ export default function ChatList() {
   return (
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col pb-0 md:pb-0">
         {/* Header */}
         <div className="bg-[#202c33] px-4 py-3">
           <h1 className="text-white text-lg font-semibold">Chats</h1>
@@ -216,7 +210,6 @@ export default function ChatList() {
               }
             }
 
-            // Check if last message is from current user
             const isSentByMe = lastMsg?.sender === user?.id;
             const msgPrefix = isSentByMe ? 'You: ' : '';
 
@@ -259,7 +252,7 @@ export default function ChatList() {
                   </p>
                 </div>
 
-                {/* Unread Badge - Like WhatsApp! */}
+                {/* Unread Badge */}
                 {unread > 0 && (
                   <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5">
                     {unread > 99 ? '99+' : unread}

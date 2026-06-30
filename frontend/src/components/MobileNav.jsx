@@ -1,8 +1,19 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { MessageCircle, Circle, Phone, UserPlus } from 'lucide-react';
 
 export default function MobileNav() {
+  const location = useLocation();
+  
+  // Hide bottom nav on chat window, call page, and login page
+  const hideNav = location.pathname.includes('/chat/') || 
+                  location.pathname.includes('/call/') ||
+                  location.pathname === '/login';
+
+  if (hideNav) {
+    return null;
+  }
+
   const linkClass = ({ isActive }) =>
     `flex flex-col items-center justify-center gap-0.5 py-1 px-2 text-[10px] font-medium transition-colors ${
       isActive ? 'text-whatsapp-green' : 'text-gray-400'
