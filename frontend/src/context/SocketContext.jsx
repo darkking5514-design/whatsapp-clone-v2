@@ -1,8 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { useAuth } from './AuthContext';
-
-const SOCKET_URL = 'http://localhost:5000';
+import { SOCKET_URL } from '../api/axios';
 
 const SocketContext = createContext(null);
 
@@ -15,7 +14,7 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     if (!user) {
-      console.log('⚠️ No user in SocketContext');
+      console.log('⚠️ No user in SocketContext - disconnecting');
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -25,10 +24,10 @@ export function SocketProvider({ children }) {
 
     console.log(`🔌 Connecting to socket server: ${SOCKET_URL}`);
     console.log(`👤 User ID: ${user.id}`);
-    console.log(`👤 Full User:`, user);
 
+    // Ensure we have a valid user ID
     if (!user.id) {
-      console.error('❌ User ID is undefined! Cannot connect socket.');
+      console.error('❌ User ID is undefined - cannot connect socket');
       return;
     }
 
@@ -37,11 +36,15 @@ export function SocketProvider({ children }) {
       withCredentials: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
+      timeout: 10000,
     });
 
     socketRef.current = socket;
-    window.__socket = socket;
+    window.__socket = socket; // For debugging
 
+    // ============================================
+    // SOCKET EVENT HANDLERS
+    // ============================================
     socket.on('connect', () => {
       console.log(`✅ Socket connected! ID: ${socket.id}`);
       setConnected(true);
@@ -51,6 +54,7 @@ export function SocketProvider({ children }) {
 
     socket.on('connect_error', (err) => {
       console.error('❌ Socket connection error:', err.message);
+      setConnected(false);
     });
 
     socket.on('disconnect', (reason) => {
@@ -58,6 +62,17 @@ export function SocketProvider({ children }) {
       setConnected(false);
     });
 
+    socket.on('reconnect', (attemptNumber) => {
+      console.log(`🔄 Socket reconnected after ${attemptNumber} attempts`);
+      setConnected(true);
+      if (user?.id) {
+        socket.emit('join', user.id);
+      }
+    });
+
+    // ============================================
+    // USER PRESENCE
+    // ============================================
     socket.on('user_online', ({ userId }) => {
       console.log(`🟢 User online: ${userId}`);
       setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
@@ -72,15 +87,35 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // ============================================
+    // MESSAGES
+    // ============================================
     socket.on('receive_message', (message) => {
       console.log('📩 Received message:', message);
+      // ChatWindow component handles this via its own listener
     });
 
+    // ============================================
+    // CALLS
+    // ============================================
     socket.on('call_offer', ({ from, offer, callType, callerName }) => {
       console.log(`📞 Incoming call from: ${callerName}`);
       setIncomingCall({ from, offer, callType, callerName });
     });
 
+    socket.on('call_end', ({ from }) => {
+      console.log(`📞 Call ended by: ${from}`);
+      setIncomingCall(null);
+    });
+
+    socket.on('call_reject', ({ from }) => {
+      console.log(`📞 Call rejected by: ${from}`);
+      setIncomingCall(null);
+    });
+
+    // ============================================
+    // CLEANUP
+    // ============================================
     return () => {
       console.log('🔌 Cleaning up socket...');
       socket.disconnect();
@@ -89,10 +124,16 @@ export function SocketProvider({ children }) {
     };
   }, [user]);
 
+  // ============================================
+  // CLEAR INCOMING CALL
+  // ============================================
   function clearIncomingCall() {
     setIncomingCall(null);
   }
 
+  // ============================================
+  // CONTEXT PROVIDER
+  // ============================================
   return (
     <SocketContext.Provider
       value={{
@@ -110,6 +151,8 @@ export function SocketProvider({ children }) {
 
 export function useSocket() {
   const ctx = useContext(SocketContext);
-  if (!ctx) throw new Error('useSocket must be used within a SocketProvider');
+  if (!ctx) {
+    throw new Error('useSocket must be used within a SocketProvider');
+  }
   return ctx;
 }
