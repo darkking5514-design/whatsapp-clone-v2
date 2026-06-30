@@ -363,8 +363,16 @@ export default function ChatWindow() {
 
       {/* Main Chat Area */}
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== HEADER - Always Visible (No conditional rendering) ===== */}
-        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-10 border-b border-[#2f3b41] flex-shrink-0">
+        {/* ===== HEADER - ALWAYS VISIBLE ===== */}
+        <div 
+          className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] md:min-h-[64px] z-50 border-b border-[#2f3b41] flex-shrink-0 chat-header-force"
+          style={{ 
+            display: 'flex !important', 
+            visibility: 'visible !important', 
+            opacity: '1 !important',
+            minHeight: '56px !important'
+          }}
+        >
           {/* Left: Back + Avatar + Name */}
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button

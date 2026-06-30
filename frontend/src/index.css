@@ -45,20 +45,51 @@ body {
 }
 
 /* ============================================
+   FORCE CHAT HEADER - ALWAYS VISIBLE
+   This is the most important fix!
+   ============================================ */
+
+/* Target the exact header div - Force visible! */
+.bg-\[\#202c33\].px-2\ py-2,
+.bg-\[\#202c33\].px-2.py-2 {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  min-height: 56px !important;
+  max-height: 64px !important;
+  background-color: #202c33 !important;
+  border-bottom: 1px solid #2f3b41 !important;
+  position: relative !important;
+  z-index: 999 !important;
+  transform: translateY(0) !important;
+  top: 0 !important;
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+
+/* Ensure all children are visible too */
+.bg-\[\#202c33\].px-2.py-2 * {
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+/* Make sure the chat area doesn't hide header */
+.flex.flex-col.h-screen.bg-whatsapp-chatbg {
+  padding-top: 0 !important;
+  margin-top: 0 !important;
+  min-height: 100dvh !important;
+}
+
+/* Prevent any overflow issues */
+.overflow-y-auto {
+  overscroll-behavior: contain;
+}
+
+/* ============================================
    MOBILE RESPONSIVE
    ============================================ */
 
-/* Mobile First - WhatsApp Style */
 @media (max-width: 768px) {
-  /* Full screen app */
-  .app-container {
-    width: 100% !important;
-    max-width: 100% !important;
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    overflow: hidden !important;
-  }
-
   /* Sidebar - Bottom navigation */
   .sidebar-bottom {
     position: fixed;
@@ -105,100 +136,6 @@ body {
     font-weight: 500;
   }
 
-  /* Chat List - Mobile */
-  .chat-list-mobile {
-    height: calc(100dvh - 120px);
-    overflow-y: auto;
-    padding-bottom: 60px;
-  }
-
-  /* Chat Window - Mobile */
-  .chat-window-mobile {
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  .chat-header-mobile {
-    padding: 8px 12px;
-    flex-shrink: 0;
-    background: #202c33;
-    border-bottom: 1px solid #2f3b41;
-  }
-
-  .chat-messages-mobile {
-    flex: 1;
-    overflow-y: auto;
-    padding: 8px 10px;
-    overscroll-behavior: contain;
-  }
-
-  .chat-input-mobile {
-    flex-shrink: 0;
-    padding: 6px 10px;
-    background: #202c33;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    border-top: 1px solid #2f3b41;
-  }
-
-  .chat-input-mobile input {
-    flex: 1;
-    background: #2a3942;
-    color: white;
-    border-radius: 20px;
-    padding: 8px 14px;
-    font-size: 14px;
-    border: none;
-    outline: none;
-    min-height: 40px;
-  }
-
-  .chat-input-mobile input::placeholder {
-    color: #6a7a83;
-  }
-
-  .chat-input-mobile button {
-    width: 40px;
-    height: 40px;
-    border-radius: 50%;
-    background: #25D366;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: black;
-    flex-shrink: 0;
-  }
-
-  /* Messages - Mobile */
-  .message-bubble-mobile {
-    max-width: 85% !important;
-    padding: 8px 12px !important;
-    border-radius: 12px !important;
-    font-size: 14px !important;
-    word-wrap: break-word !important;
-  }
-
-  /* Login - Mobile */
-  .login-container-mobile {
-    padding: 16px !important;
-    height: 100dvh !important;
-    display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-  }
-
-  .login-container-mobile .login-card {
-    width: 100% !important;
-    max-width: 100% !important;
-    padding: 24px !important;
-    border-radius: 16px !important;
-  }
-
   /* Hide desktop sidebar on mobile */
   .sidebar-desktop {
     display: none !important;
@@ -227,7 +164,7 @@ body {
 }
 
 /* ============================================
-   DESKTOP - Keep as is
+   DESKTOP
    ============================================ */
 @media (min-width: 769px) {
   .sidebar-bottom {
@@ -249,56 +186,5 @@ body {
 
   .safe-top {
     padding-top: max(10px, env(safe-area-inset-top, 10px));
-  }
-}
-/* Chat Window - Full height without bottom nav */
-@media (max-width: 768px) {
-  .chat-window-mobile {
-    height: 100dvh !important;
-    max-height: 100dvh !important;
-    padding-bottom: 0 !important;
-  }
-  
-  /* Hide bottom nav on chat pages */
-  .hide-nav-on-chat .sidebar-bottom {
-    display: none !important;
-  }
-}
-
-/* ============================================
-   CHAT HEADER FIX - Mobile
-   ============================================ */
-@media (max-width: 768px) {
-  .bg-\[\#202c33\] {
-    background-color: #202c33 !important;
-  }
-  
-  /* Ensure header is visible */
-  .chat-header-mobile {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    min-height: 56px !important;
-  }
-}
-/* ============================================
-   CHAT HEADER FIX - ALWAYS VISIBLE ON MOBILE
-   ============================================ */
-@media (max-width: 768px) {
-  .bg-\[\#202c33\].px-2.py-2 {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    min-height: 56px !important;
-    max-height: 64px !important;
-  }
-  
-  /* Ensure header doesn't get hidden by anything */
-  .chat-header-container {
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    position: relative !important;
-    z-index: 20 !important;
   }
 }

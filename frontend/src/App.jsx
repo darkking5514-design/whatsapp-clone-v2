@@ -74,7 +74,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/chats" replace />} />
       </Routes>
 
-      {/* Mobile Bottom Navigation - Only when logged in and not on chat/call pages */}
+      {/* Mobile Bottom Navigation - Only when logged in */}
       {user && <MobileNav />}
     </>
   );
