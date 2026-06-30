@@ -6,8 +6,10 @@ import ChatWindow from './pages/ChatWindow';
 import Status from './pages/Status';
 import Calls from './pages/Calls';
 import Call from './pages/Call';
+import AddFriends from './pages/AddFriends';
 import ProtectedRoute from './components/ProtectedRoute';
 import IncomingCallBanner from './components/IncomingCallBanner';
+import MobileNav from './components/MobileNav';
 import { useAuth } from './context/AuthContext';
 
 export default function App() {
@@ -59,10 +61,21 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+          path="/friends"
+          element={
+            <ProtectedRoute>
+              <AddFriends />
+            </ProtectedRoute>
+          }
+        />
 
         <Route path="/" element={<Navigate to="/chats" replace />} />
         <Route path="*" element={<Navigate to="/chats" replace />} />
       </Routes>
+
+      {/* Mobile Bottom Navigation - Only when logged in */}
+      {user && <MobileNav />}
     </>
   );
 }
