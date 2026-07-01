@@ -45,6 +45,7 @@ export default function Call() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [iceState, setIceState] = useState('new');
   const [showPlayButton, setShowPlayButton] = useState(false);
+  const [remoteStreamSet, setRemoteStreamSet] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -54,36 +55,55 @@ export default function Call() {
   const remoteStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
+  const playCheckInterval = useRef(null);
 
-  // Attempt to play remote stream automatically
-  const playRemoteStream = () => {
-    if (!remoteVideoRef.current || !remoteStreamRef.current) return false;
+  // Function to attempt playing remote video
+  const attemptPlay = () => {
+    if (!remoteVideoRef.current || !remoteStreamRef.current) {
+      console.warn('⚠️ attemptPlay: no video element or stream');
+      return false;
+    }
     const video = remoteVideoRef.current;
-    video.srcObject = remoteStreamRef.current;
-    video.volume = 1.0;
-    video.muted = false;
-    video.load();
-    return video.play()
+    // Assign srcObject if not already assigned
+    if (!video.srcObject) {
+      video.srcObject = remoteStreamRef.current;
+      video.volume = 1.0;
+      video.muted = false;
+      video.load();
+    }
+    video.play()
       .then(() => {
-        console.log('✅ Remote video playing automatically');
+        console.log('✅ Remote video playing');
         setShowPlayButton(false);
-        return true;
+        // Clear interval if playing
+        if (playCheckInterval.current) {
+          clearInterval(playCheckInterval.current);
+          playCheckInterval.current = null;
+        }
       })
       .catch(err => {
-        console.warn('⚠️ Autoplay blocked:', err.name);
-        if (err.name === 'NotAllowedError') {
-          // Autoplay blocked – show play button
+        console.warn('⚠️ Play failed:', err.name);
+        if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
           setShowPlayButton(true);
+          // Start checking if video is paused
+          if (!playCheckInterval.current) {
+            playCheckInterval.current = setInterval(() => {
+              if (remoteVideoRef.current && !remoteVideoRef.current.paused) {
+                // Video is playing now
+                setShowPlayButton(false);
+                clearInterval(playCheckInterval.current);
+                playCheckInterval.current = null;
+              }
+            }, 500);
+          }
         }
-        return false;
       });
+    return true;
   };
 
   // Manual play on button click
   const handlePlayClick = () => {
-    playRemoteStream().then(success => {
-      if (success) setShowPlayButton(false);
-    });
+    attemptPlay();
   };
 
   useEffect(() => {
@@ -121,6 +141,7 @@ export default function Call() {
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
           remoteStreamRef.current = remoteStream;
+          setRemoteStreamSet(true);
 
           // Enable all tracks
           remoteStream.getTracks().forEach(track => {
@@ -128,7 +149,7 @@ export default function Call() {
             console.log('🔊 Track enabled:', track.kind);
           });
 
-          // Audio always plays via hidden audio element
+          // Assign to audio element
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
             remoteAudioRef.current.volume = 1.0;
@@ -138,9 +159,17 @@ export default function Call() {
               .catch(e => console.warn('⚠️ Audio autoplay blocked'));
           }
 
-          // Video: try to autoplay
+          // Handle video
           if (callType === 'video') {
-            playRemoteStream();
+            // Assign to video element
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = remoteStream;
+              remoteVideoRef.current.volume = 1.0;
+              remoteVideoRef.current.muted = false;
+              remoteVideoRef.current.load();
+              // Attempt to play
+              attemptPlay();
+            }
           }
         };
 
@@ -204,53 +233,17 @@ export default function Call() {
 
     setup();
 
-    function onCallAnswer({ from, answer }) {
-      if (from !== otherUserId || !pcRef.current) return;
-      const pc = pcRef.current;
-      pc.setRemoteDescription(new RTCSessionDescription(answer))
-        .then(() => {
-          for (const candidate of pendingCandidatesRef.current) {
-            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn('Error adding candidate', err));
-          }
-          pendingCandidatesRef.current = [];
-        })
-        .catch(err => console.error('Set remote description error:', err));
-    }
-
-    function onIceCandidate({ from, candidate }) {
-      if (from !== otherUserId) return;
-      const pc = pcRef.current;
-      if (!pc) return;
-      if (pc.remoteDescription && pc.remoteDescription.type) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn('Error adding candidate', err));
-      } else {
-        pendingCandidatesRef.current.push(candidate);
-      }
-    }
-
-    function onCallEnd({ from }) {
-      if (from !== otherUserId) return;
-      setCallStatus('Call ended');
-      endCall(false);
-    }
-
-    function onCallReject({ from }) {
-      if (from !== otherUserId) return;
-      setCallStatus('Call declined');
-      endCall(false);
-    }
-
-    socket?.on('call_answer', onCallAnswer);
-    socket?.on('call_ice_candidate', onIceCandidate);
-    socket?.on('call_end', onCallEnd);
-    socket?.on('call_reject', onCallReject);
-
+    // Cleanup interval on unmount
     return () => {
+      if (playCheckInterval.current) {
+        clearInterval(playCheckInterval.current);
+        playCheckInterval.current = null;
+      }
       cancelled = true;
-      socket?.off('call_answer', onCallAnswer);
-      socket?.off('call_ice_candidate', onIceCandidate);
-      socket?.off('call_end', onCallEnd);
-      socket?.off('call_reject', onCallReject);
+      socket?.off('call_answer');
+      socket?.off('call_ice_candidate');
+      socket?.off('call_end');
+      socket?.off('call_reject');
       cleanupMedia();
     };
   }, []);
@@ -267,6 +260,11 @@ export default function Call() {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
     remoteStreamRef.current = null;
+    setRemoteStreamSet(false);
+    if (playCheckInterval.current) {
+      clearInterval(playCheckInterval.current);
+      playCheckInterval.current = null;
+    }
   }
 
   function endCall(notifyPeer = true) {
@@ -302,18 +300,29 @@ export default function Call() {
   return (
     <div className="flex flex-col h-screen bg-black relative">
       <div className="flex-1 flex items-center justify-center bg-[#0b141a] relative overflow-hidden">
-        {callType === 'video' && remoteConnected ? (
+        {callType === 'video' && remoteStreamSet ? (
           <div className="relative w-full h-full">
             <video
               ref={remoteVideoRef}
               autoPlay
               playsInline
               className="w-full h-full object-cover"
+              onPlay={() => {
+                console.log('🎬 onPlay triggered');
+                setShowPlayButton(false);
+              }}
+              onPause={() => {
+                console.log('⏸️ onPause triggered');
+                // If paused and stream is there, show button
+                if (remoteStreamRef.current) {
+                  setShowPlayButton(true);
+                }
+              }}
             />
             {showPlayButton && (
               <button
                 onClick={handlePlayClick}
-                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"
+                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white z-10"
               >
                 <div className="flex flex-col items-center gap-2">
                   <Play size={48} />
@@ -375,6 +384,7 @@ export default function Call() {
         </button>
       </div>
 
+      {/* Hidden audio element for audio-only calls */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
