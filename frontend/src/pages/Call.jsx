@@ -44,7 +44,7 @@ export default function Call() {
   const [videoOff, setVideoOff] = useState(callType !== 'video');
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [iceState, setIceState] = useState('new');
-  const [videoPlaying, setVideoPlaying] = useState(false);
+  const [showPlayButton, setShowPlayButton] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -55,20 +55,35 @@ export default function Call() {
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
 
-  // Function to manually start remote video
-  const startRemoteVideo = () => {
-    if (remoteVideoRef.current && remoteStreamRef.current) {
-      remoteVideoRef.current.srcObject = remoteStreamRef.current;
-      remoteVideoRef.current.volume = 1.0;
-      remoteVideoRef.current.muted = false;
-      remoteVideoRef.current.load(); // reload the media
-      remoteVideoRef.current.play()
-        .then(() => {
-          console.log('✅ Remote video started manually');
-          setVideoPlaying(true);
-        })
-        .catch(e => console.warn('⚠️ Manual play failed:', e));
-    }
+  // Attempt to play remote stream automatically
+  const playRemoteStream = () => {
+    if (!remoteVideoRef.current || !remoteStreamRef.current) return false;
+    const video = remoteVideoRef.current;
+    video.srcObject = remoteStreamRef.current;
+    video.volume = 1.0;
+    video.muted = false;
+    video.load();
+    return video.play()
+      .then(() => {
+        console.log('✅ Remote video playing automatically');
+        setShowPlayButton(false);
+        return true;
+      })
+      .catch(err => {
+        console.warn('⚠️ Autoplay blocked:', err.name);
+        if (err.name === 'NotAllowedError') {
+          // Autoplay blocked – show play button
+          setShowPlayButton(true);
+        }
+        return false;
+      });
+  };
+
+  // Manual play on button click
+  const handlePlayClick = () => {
+    playRemoteStream().then(success => {
+      if (success) setShowPlayButton(false);
+    });
   };
 
   useEffect(() => {
@@ -113,7 +128,7 @@ export default function Call() {
             console.log('🔊 Track enabled:', track.kind);
           });
 
-          // For audio, assign to audio element
+          // Audio always plays via hidden audio element
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
             remoteAudioRef.current.volume = 1.0;
@@ -123,24 +138,9 @@ export default function Call() {
               .catch(e => console.warn('⚠️ Audio autoplay blocked'));
           }
 
-          // For video, store stream and show play button if needed
+          // Video: try to autoplay
           if (callType === 'video') {
-            // Try autoplay
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remoteStream;
-              remoteVideoRef.current.volume = 1.0;
-              remoteVideoRef.current.muted = false;
-              remoteVideoRef.current.load();
-              remoteVideoRef.current.play()
-                .then(() => {
-                  console.log('✅ Remote video autoplayed');
-                  setVideoPlaying(true);
-                })
-                .catch(e => {
-                  console.warn('⚠️ Video autoplay blocked, user must tap play');
-                  setVideoPlaying(false);
-                });
-            }
+            playRemoteStream();
           }
         };
 
@@ -310,15 +310,14 @@ export default function Call() {
               playsInline
               className="w-full h-full object-cover"
             />
-            {/* Show Play button if video not playing */}
-            {!videoPlaying && remoteStreamRef.current && (
+            {showPlayButton && (
               <button
-                onClick={startRemoteVideo}
-                className="absolute inset-0 flex items-center justify-center bg-black/50 text-white"
+                onClick={handlePlayClick}
+                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white"
               >
                 <div className="flex flex-col items-center gap-2">
                   <Play size={48} />
-                  <span>Tap to play video</span>
+                  <span className="text-sm">Tap to play video</span>
                 </div>
               </button>
             )}
@@ -376,7 +375,6 @@ export default function Call() {
         </button>
       </div>
 
-      {/* Hidden audio element for audio-only calls */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
