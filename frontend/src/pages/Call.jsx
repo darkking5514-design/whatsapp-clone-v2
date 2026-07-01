@@ -4,7 +4,6 @@ import { Mic, MicOff, Phone, Video, VideoOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
-// Use multiple STUN + a free TURN server for better connectivity
 const ICE_SERVERS = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
@@ -12,7 +11,6 @@ const ICE_SERVERS = {
     { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
-    // Free TURN server (for testing) – remove in production or use your own
     {
       urls: 'turn:openrelay.metered.ca:80',
       username: 'openrelayproject',
@@ -59,53 +57,39 @@ export default function Call() {
 
     async function setup() {
       try {
-        // Get local media stream
+        console.log('📱 Requesting media devices...');
         const stream = await navigator.mediaDevices.getUserMedia({
           video: callType === 'video',
           audio: true,
         });
         if (cancelled) return;
         localStreamRef.current = stream;
+        console.log('✅ Local stream obtained, tracks:', stream.getTracks().length);
+
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
 
-        // Create peer connection
         const pc = new RTCPeerConnection(ICE_SERVERS);
         pcRef.current = pc;
 
-        // Add tracks with proper direction
+        // Add tracks to peer connection
         stream.getTracks().forEach((track) => {
+          console.log('➕ Adding track:', track.kind);
           pc.addTrack(track, stream);
         });
 
-        // Also use transceivers for better control
-        if (callType === 'video') {
-          // Ensure video transceiver exists with 'sendrecv'
-          const videoTransceiver = pc.getTransceivers().find(t => t.receiver.track.kind === 'video');
-          if (videoTransceiver) {
-            videoTransceiver.direction = 'sendrecv';
-          }
-        }
-        const audioTransceiver = pc.getTransceivers().find(t => t.receiver.track.kind === 'audio');
-        if (audioTransceiver) {
-          audioTransceiver.direction = 'sendrecv';
-        }
-
-        // Handle incoming remote stream
         pc.ontrack = (event) => {
           console.log('📡 Remote track received:', event.track.kind);
           setRemoteConnected(true);
           setCallStatus('Connected');
           if (remoteVideoRef.current) {
-            // If multiple streams, use first one
             const remoteStream = event.streams[0];
             remoteVideoRef.current.srcObject = remoteStream;
             remoteVideoRef.current.play().catch(e => console.warn('Play error:', e));
           }
         };
 
-        // Handle ICE candidates
         pc.onicecandidate = (event) => {
           if (event.candidate) {
             socket?.emit('call_ice_candidate', {
@@ -116,24 +100,20 @@ export default function Call() {
           }
         };
 
-        // Connection state monitoring
         pc.oniceconnectionstatechange = () => {
           const state = pc.iceConnectionState;
           setIceState(state);
-          console.log('ICE State:', state);
+          console.log('🧊 ICE State:', state);
           if (state === 'connected' || state === 'completed') {
             setCallStatus('Connected');
           } else if (state === 'failed') {
             setCallStatus('Connection failed');
             endCall(false);
-          } else if (state === 'disconnected') {
-            setCallStatus('Disconnected');
           }
         };
 
-        // Ensure we have local description before sending
         if (isCaller) {
-          // Caller creates offer
+          console.log('📤 Creating offer...');
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket?.emit('call_offer', {
@@ -144,18 +124,14 @@ export default function Call() {
             callerName: user.name,
           });
         } else if (incomingOffer) {
-          // Receiver sets remote description from offer
+          console.log('📥 Setting remote description from offer...');
           await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
-          // Flush any buffered candidates
           for (const candidate of pendingCandidatesRef.current) {
             try {
               await pc.addIceCandidate(new RTCIceCandidate(candidate));
-            } catch (err) {
-              console.warn('Error adding candidate:', err);
-            }
+            } catch (err) {}
           }
           pendingCandidatesRef.current = [];
-          // Create answer
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket?.emit('call_answer', {
@@ -166,7 +142,7 @@ export default function Call() {
         }
 
       } catch (err) {
-        console.error('Failed to start call:', err);
+        console.error('❌ Failed to start call:', err);
         setCallStatus('Could not access camera/microphone');
         alert('Please allow camera and microphone permissions.');
       }
@@ -174,17 +150,13 @@ export default function Call() {
 
     setup();
 
-    // Socket event handlers
     function onCallAnswer({ from, answer }) {
       if (from !== otherUserId || !pcRef.current) return;
       const pc = pcRef.current;
-      // Set remote description
       pc.setRemoteDescription(new RTCSessionDescription(answer))
         .then(() => {
-          // Add any pending candidates after description set
           for (const candidate of pendingCandidatesRef.current) {
-            pc.addIceCandidate(new RTCIceCandidate(candidate))
-              .catch(err => console.warn('Failed to add ICE candidate', err));
+            pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn('Error adding candidate', err));
           }
           pendingCandidatesRef.current = [];
         })
@@ -195,10 +167,8 @@ export default function Call() {
       if (from !== otherUserId) return;
       const pc = pcRef.current;
       if (!pc) return;
-      // Add candidate if remote description is set, else buffer
       if (pc.remoteDescription && pc.remoteDescription.type) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate))
-          .catch(err => console.warn('Error adding candidate', err));
+        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(err => console.warn('Error adding candidate', err));
       } else {
         pendingCandidatesRef.current.push(candidate);
       }
@@ -273,7 +243,6 @@ export default function Call() {
 
   return (
     <div className="flex flex-col h-screen bg-black relative">
-      {/* Remote video / avatar */}
       <div className="flex-1 flex items-center justify-center bg-[#0b141a] relative overflow-hidden">
         {callType === 'video' && remoteConnected ? (
           <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
@@ -288,7 +257,6 @@ export default function Call() {
           </div>
         )}
 
-        {/* Local video (picture in picture) */}
         {callType === 'video' && (
           <video
             ref={localVideoRef}
@@ -306,12 +274,10 @@ export default function Call() {
         )}
       </div>
 
-      {/* Controls */}
       <div className="bg-[#111b21] py-5 flex items-center justify-center gap-6">
         <button
           onClick={toggleMute}
           className={`p-4 rounded-full ${muted ? 'bg-white text-black' : 'bg-[#2a3942] text-white'}`}
-          title={muted ? 'Unmute' : 'Mute'}
         >
           {muted ? <MicOff size={22} /> : <Mic size={22} />}
         </button>
@@ -320,7 +286,6 @@ export default function Call() {
           <button
             onClick={toggleVideo}
             className={`p-4 rounded-full ${videoOff ? 'bg-white text-black' : 'bg-[#2a3942] text-white'}`}
-            title={videoOff ? 'Turn camera on' : 'Turn camera off'}
           >
             {videoOff ? <VideoOff size={22} /> : <Video size={22} />}
           </button>
@@ -329,7 +294,6 @@ export default function Call() {
         <button
           onClick={() => endCall(true)}
           className="p-4 rounded-full bg-red-600 text-white"
-          title="End call"
         >
           <Phone size={22} className="rotate-[135deg]" />
         </button>
