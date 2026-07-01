@@ -49,6 +49,7 @@ export default function Call() {
   const remoteVideoRef = useRef(null);
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
+  const remoteStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
 
@@ -68,12 +69,12 @@ export default function Call() {
 
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
+          localVideoRef.current.play().catch(e => console.warn('Local play error:', e));
         }
 
         const pc = new RTCPeerConnection(ICE_SERVERS);
         pcRef.current = pc;
 
-        // Add tracks to peer connection
         stream.getTracks().forEach((track) => {
           console.log('➕ Adding track:', track.kind);
           pc.addTrack(track, stream);
@@ -83,10 +84,17 @@ export default function Call() {
           console.log('📡 Remote track received:', event.track.kind);
           setRemoteConnected(true);
           setCallStatus('Connected');
-          if (remoteVideoRef.current) {
-            const remoteStream = event.streams[0];
-            remoteVideoRef.current.srcObject = remoteStream;
-            remoteVideoRef.current.play().catch(e => console.warn('Play error:', e));
+
+          // Store remote stream
+          if (event.streams && event.streams.length > 0) {
+            remoteStreamRef.current = event.streams[0];
+            if (remoteVideoRef.current) {
+              remoteVideoRef.current.srcObject = event.streams[0];
+              // Force play with error handling
+              remoteVideoRef.current.play()
+                .then(() => console.log('✅ Remote video playing'))
+                .catch(e => console.warn('Remote video play error:', e));
+            }
           }
         };
 
@@ -204,10 +212,18 @@ export default function Call() {
   function cleanupMedia() {
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(t => t.stop());
+      localStreamRef.current = null;
+    }
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach(t => t.stop());
+      remoteStreamRef.current = null;
     }
     if (pcRef.current) {
       pcRef.current.close();
       pcRef.current = null;
+    }
+    if (remoteVideoRef.current) {
+      remoteVideoRef.current.srcObject = null;
     }
   }
 
@@ -245,7 +261,12 @@ export default function Call() {
     <div className="flex flex-col h-screen bg-black relative">
       <div className="flex-1 flex items-center justify-center bg-[#0b141a] relative overflow-hidden">
         {callType === 'video' && remoteConnected ? (
-          <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" />
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="flex flex-col items-center gap-3">
             <div className="w-28 h-28 rounded-full bg-whatsapp-teal flex items-center justify-center text-white text-4xl font-semibold">
