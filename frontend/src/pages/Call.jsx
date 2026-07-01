@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Mic, MicOff, Phone, Video, VideoOff, Play } from 'lucide-react';
+import { Mic, MicOff, Phone, Video, VideoOff } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -44,23 +44,14 @@ export default function Call() {
   const [videoOff, setVideoOff] = useState(callType !== 'video');
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [iceState, setIceState] = useState('new');
-  const [remoteStream, setRemoteStream] = useState(null); // Store remote stream for manual play
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
+  const remoteAudioRef = useRef(null); // separate audio element
   const pcRef = useRef(null);
   const localStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
-
-  // Force play remote video when user taps on it
-  const handleRemoteTap = () => {
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.play()
-        .then(() => console.log('✅ Remote video started playing on user tap'))
-        .catch(e => console.warn('⚠️ Play failed even on tap:', e));
-    }
-  };
 
   useEffect(() => {
     let cancelled = false;
@@ -94,17 +85,34 @@ export default function Call() {
           setRemoteConnected(true);
           setCallStatus('Connected');
 
-          // Store remote stream
-          if (event.streams && event.streams.length > 0) {
-            const remote = event.streams[0];
-            setRemoteStream(remote);
-            if (remoteVideoRef.current) {
-              remoteVideoRef.current.srcObject = remote;
-              // Try to play immediately; if fails, user tap will trigger it
-              remoteVideoRef.current.play()
-                .then(() => console.log('✅ Remote video autoplayed'))
-                .catch(e => console.warn('⚠️ Autoplay blocked, tap to play'));
-            }
+          // Get the remote stream
+          const remoteStream = event.streams[0];
+          if (!remoteStream) return;
+
+          // Force enable all tracks
+          remoteStream.getTracks().forEach(track => {
+            track.enabled = true;
+            console.log('🔊 Track enabled:', track.kind);
+          });
+
+          // Assign to video element if video track exists
+          if (callType === 'video' && remoteVideoRef.current) {
+            remoteVideoRef.current.srcObject = remoteStream;
+            remoteVideoRef.current.volume = 1.0;
+            remoteVideoRef.current.muted = false;
+            remoteVideoRef.current.play()
+              .then(() => console.log('✅ Remote video playing'))
+              .catch(e => console.warn('⚠️ Video autoplay failed:', e));
+          }
+
+          // Also assign to audio element (for both audio-only and video calls)
+          if (remoteAudioRef.current) {
+            remoteAudioRef.current.srcObject = remoteStream;
+            remoteAudioRef.current.volume = 1.0;
+            remoteAudioRef.current.muted = false;
+            remoteAudioRef.current.play()
+              .then(() => console.log('✅ Remote audio playing'))
+              .catch(e => console.warn('⚠️ Audio autoplay failed:', e));
           }
         };
 
@@ -231,6 +239,9 @@ export default function Call() {
     if (remoteVideoRef.current) {
       remoteVideoRef.current.srcObject = null;
     }
+    if (remoteAudioRef.current) {
+      remoteAudioRef.current.srcObject = null;
+    }
   }
 
   function endCall(notifyPeer = true) {
@@ -267,23 +278,12 @@ export default function Call() {
     <div className="flex flex-col h-screen bg-black relative">
       <div className="flex-1 flex items-center justify-center bg-[#0b141a] relative overflow-hidden">
         {callType === 'video' && remoteConnected ? (
-          <div className="w-full h-full relative" onClick={handleRemoteTap}>
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-cover"
-            />
-            {/* Tap to play overlay if autoplay blocked */}
-            {remoteStream && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <div className="bg-black/50 rounded-full p-4 pointer-events-auto">
-                  <Play size={32} className="text-white" />
-                  <span className="text-white text-xs block mt-1">Tap to play</span>
-                </div>
-              </div>
-            )}
-          </div>
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className="w-full h-full object-cover"
+          />
         ) : (
           <div className="flex flex-col items-center gap-3">
             <div className="w-28 h-28 rounded-full bg-whatsapp-teal flex items-center justify-center text-white text-4xl font-semibold">
@@ -336,6 +336,9 @@ export default function Call() {
           <Phone size={22} className="rotate-[135deg]" />
         </button>
       </div>
+
+      {/* Hidden audio element for audio-only calls */}
+      <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
 }
