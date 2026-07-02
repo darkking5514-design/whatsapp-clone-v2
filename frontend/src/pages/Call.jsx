@@ -47,7 +47,7 @@ export default function Call() {
   const [iceState, setIceState] = useState('new');
   const [showPlayButton, setShowPlayButton] = useState(false);
   const [remoteStreamReady, setRemoteStreamReady] = useState(false);
-  const [callDuration, setCallDuration] = useState(0); // seconds
+  const [callDuration, setCallDuration] = useState(0);
   const [speakerOn, setSpeakerOn] = useState(false);
   const [timerActive, setTimerActive] = useState(false);
 
@@ -69,30 +69,31 @@ export default function Call() {
     return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
   };
 
-  // ---- Speaker toggle ----
+  // ---- Toggle speaker ----
   const toggleSpeaker = () => {
-    const audioEl = remoteAudioRef.current;
-    if (!audioEl) return;
-    // Try using setSinkId if supported
-    if (audioEl.setSinkId) {
-      const sinkId = speakerOn ? 'default' : 'speaker'; // 'speaker' may not be valid; we need to detect available devices
-      // Actually better to use enumerateDevices and select audio output
-      // For simplicity, we'll just toggle volume or use a workaround: create an AudioContext?
-      // But many browsers support setSinkId. We'll try to set to 'default' vs first output.
-      // Here we just toggle a flag and we'll set volume to max if speakerOn.
-    }
-    // Fallback: increase volume for speaker effect
-    audioEl.volume = speakerOn ? 0.5 : 1.0; // just toggle volume as a cue
     setSpeakerOn(!speakerOn);
+    const audioEl = remoteAudioRef.current;
+    if (audioEl) {
+      audioEl.volume = speakerOn ? 0.5 : 1.0;
+      // Attempt to use setSinkId if available
+      if (audioEl.setSinkId) {
+        const sinkId = speakerOn ? 'default' : 'speaker';
+        // For simplicity, we just toggle volume as fallback
+      }
+    }
   };
 
   // ---- Play remote video ----
   const playRemoteVideo = () => {
     const video = remoteVideoRef.current;
     const stream = remoteStreamRef.current;
-    if (!video || !stream) return false;
+    if (!video || !stream) {
+      console.warn('⚠️ No video element or stream to play');
+      return false;
+    }
 
-    if (!video.srcObject) {
+    // Ensure srcObject is set
+    if (video.srcObject !== stream) {
       video.srcObject = stream;
       video.volume = 1.0;
       video.muted = false;
@@ -112,9 +113,23 @@ export default function Call() {
       });
   };
 
-  const handlePlayClick = () => playRemoteVideo();
+  // ---- Manual play on button click ----
+  const handlePlayClick = () => {
+    playRemoteVideo();
+  };
 
-  // ---- Setup ----
+  // ---- useEffect to attach stream when ready ----
+  useEffect(() => {
+    if (remoteStreamReady && remoteStreamRef.current) {
+      const video = remoteVideoRef.current;
+      if (video) {
+        // Assign and play
+        playRemoteVideo();
+      }
+    }
+  }, [remoteStreamReady]);
+
+  // ---- Main setup ----
   useEffect(() => {
     let cancelled = false;
 
@@ -145,7 +160,6 @@ export default function Call() {
           setCallStatus('Connected');
           if (!timerActive) {
             setTimerActive(true);
-            // Start timer
             timerIntervalRef.current = setInterval(() => {
               setCallDuration(prev => prev + 1);
             }, 1000);
@@ -154,7 +168,7 @@ export default function Call() {
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
           remoteStreamRef.current = remoteStream;
-          setRemoteStreamReady(true);
+          setRemoteStreamReady(true); // triggers useEffect to attach
 
           remoteStream.getTracks().forEach(t => t.enabled = true);
 
@@ -162,11 +176,6 @@ export default function Call() {
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
             remoteAudioRef.current.play().catch(() => {});
-          }
-
-          // Video
-          if (callType === 'video') {
-            playRemoteVideo();
           }
         };
 
@@ -321,31 +330,19 @@ export default function Call() {
     <div className="flex flex-col h-screen bg-black">
       {/* Main video area */}
       <div className="flex-1 relative bg-[#0b141a] overflow-hidden">
-        {callType === 'video' && remoteStreamReady ? (
-          <>
-            <video
-              ref={remoteVideoRef}
-              autoPlay
-              playsInline
-              className="w-full h-full object-cover"
-              onPlay={() => setShowPlayButton(false)}
-              onPause={() => {
-                if (remoteStreamRef.current) setShowPlayButton(true);
-              }}
-            />
-            {showPlayButton && (
-              <button
-                onClick={handlePlayClick}
-                className="absolute inset-0 flex items-center justify-center bg-black/60 text-white z-10"
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <Play size={48} />
-                  <span className="text-sm">Tap to play video</span>
-                </div>
-              </button>
-            )}
-          </>
-        ) : (
+        {/* Remote video – always rendered, hidden if no stream */}
+        <video
+          ref={remoteVideoRef}
+          autoPlay
+          playsInline
+          className={`w-full h-full object-cover ${!remoteStreamReady ? 'hidden' : ''}`}
+          onPlay={() => setShowPlayButton(false)}
+          onPause={() => {
+            if (remoteStreamRef.current) setShowPlayButton(true);
+          }}
+        />
+        {/* Overlay for play button or fallback */}
+        {!remoteStreamReady ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-28 h-28 rounded-full bg-whatsapp-teal flex items-center justify-center text-white text-4xl font-semibold">
               {(calleeName || 'U')[0].toUpperCase()}
@@ -357,6 +354,18 @@ export default function Call() {
               <p className="text-white text-lg font-mono">{formatTime(callDuration)}</p>
             )}
           </div>
+        ) : (
+          showPlayButton && (
+            <button
+              onClick={handlePlayClick}
+              className="absolute inset-0 flex items-center justify-center bg-black/60 text-white z-10"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <Play size={48} />
+                <span className="text-sm">Tap to play video</span>
+              </div>
+            </button>
+          )
         )}
 
         {/* Local video - picture-in-picture */}
@@ -398,7 +407,7 @@ export default function Call() {
         )}
 
         <button
-          onClick={endCall}
+          onClick={() => endCall(true)}
           className="p-4 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
         >
           <Phone size={22} className="rotate-[135deg]" />
