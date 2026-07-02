@@ -253,7 +253,6 @@ export default function ChatWindow() {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      // Compute duration
       const audio = new Audio();
       audio.src = audioURL;
       await new Promise((resolve) => {
@@ -365,14 +364,14 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="flex h-screen bg-[#111b21]">
+    <div className="flex h-screen bg-[#111b21] overflow-hidden">
       <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full relative">
-        {/* ===== FIXED HEADER (always on top) ===== */}
-        <div className="fixed top-0 left-0 right-0 z-50 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] md:left-16">
+      <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative">
+        {/* ===== HEADER - FIXED ===== */}
+        <div className="sticky top-0 z-30 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
@@ -398,9 +397,6 @@ export default function ChatWindow() {
             </button>
           </div>
         </div>
-
-        {/* ===== SPACER to offset fixed header ===== */}
-        <div className="h-[56px] flex-shrink-0" />
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
