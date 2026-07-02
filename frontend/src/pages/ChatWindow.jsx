@@ -43,6 +43,9 @@ export default function ChatWindow() {
   const recordingStartRef = useRef(null);
   const audioRefs = useRef({});
 
+  // Prevent double sends
+  const sendingRef = useRef(false);
+
   // ---- Load other user ----
   useEffect(() => {
     async function loadUser() {
@@ -84,6 +87,9 @@ export default function ChatWindow() {
     if (!socket || !connected) return;
 
     const onReceiveMessage = (message) => {
+      // Ignore messages sent by ourselves – they are already added via ack
+      if (message.sender === user.id) return;
+
       if (message.sender === otherUserId || message.receiver === otherUserId) {
         setMessages((prev) => [...prev, message]);
         if (message.sender === otherUserId) {
@@ -91,6 +97,7 @@ export default function ChatWindow() {
         }
       }
     };
+
     const onTyping = ({ from }) => { if (from === otherUserId) setIsTyping(true); };
     const onStopTyping = ({ from }) => { if (from === otherUserId) setIsTyping(false); };
     const onMessagesRead = ({ by }) => {
@@ -143,13 +150,17 @@ export default function ChatWindow() {
     }, 1500);
   };
 
-  // ---- Send message ----
+  // ---- Send message with anti-duplicate guard ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
       return;
     }
     if (!user?.id || !otherUserId) return;
+    if (sendingRef.current) {
+      console.warn('Already sending, ignoring duplicate');
+      return;
+    }
 
     const messageData = {
       senderId: user.id,
@@ -158,7 +169,10 @@ export default function ChatWindow() {
     };
     if (replyTo) messageData.replyTo = replyTo._id;
 
+    sendingRef.current = true;
+
     socket.emit('send_message', messageData, (response) => {
+      sendingRef.current = false;
       if (response?.success) {
         setMessages((prev) => [...prev, response.message]);
         setReplyTo(null);
@@ -237,9 +251,7 @@ export default function ChatWindow() {
       mediaRecorderRef.current.stop();
       clearInterval(recordingTimerRef.current);
       setIsRecording(false);
-      // Recompute the final duration from the actual elapsed time rather than
-      // relying only on the 1-second interval ticks, so short recordings
-      // (e.g. under 1s) still get a correct, non-zero duration.
+      // Recompute final duration from actual elapsed time
       if (recordingStartRef.current) {
         const elapsed = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
         setRecordingTime(elapsed);
@@ -262,10 +274,7 @@ export default function ChatWindow() {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      // Reading `.duration` off a freshly recorded webm Blob via new Audio()
-      // is unreliable (Chrome/Android often reports Infinity/NaN until the
-      // media is seeked). We already track elapsed seconds while recording
-      // via `recordingTime`, so just use that directly instead.
+      // Use the already tracked recordingTime as duration
       const duration = recordingTime;
 
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
@@ -378,13 +387,7 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative min-h-0">
-        {/* ===== HEADER (part of normal flex flow, not `fixed`) =====
-            NOTE: we intentionally do NOT use `position: fixed` here.
-            On mobile browsers the visible viewport height changes as the
-            address bar shows/hides, which combined with `overflow:hidden`
-            on html/body made a fixed header end up clipped or pushed off
-            screen. `sticky` inside this flex column achieves the same
-            "always visible while scrolling" behavior without that problem. */}
+        {/* ===== HEADER (sticky) ===== */}
         <div className="sticky top-0 z-20 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
@@ -537,13 +540,9 @@ export default function ChatWindow() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
-                          onError={() => {
-                            console.error('Audio load error for message:', m._id);
-                            // Optionally show a fallback UI
-                          }}
+                          onError={() => console.error('Audio load error for message:', m._id)}
                           className="hidden"
                         />
-                        {/* Fallback if audio fails */}
                         {!audioRefs.current[m._id]?.src && (
                           <span className="text-xs text-red-400">Unavailable</span>
                         )}
