@@ -39,7 +39,6 @@ export default function Call() {
   const { isCaller = true, callType = 'video', offer: incomingOffer, calleeName } =
     location.state || {};
 
-  // State
   const [callStatus, setCallStatus] = useState(isCaller ? 'Calling...' : 'Connecting...');
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(callType !== 'video');
@@ -75,11 +74,6 @@ export default function Call() {
     const audioEl = remoteAudioRef.current;
     if (audioEl) {
       audioEl.volume = speakerOn ? 0.5 : 1.0;
-      // Attempt to use setSinkId if available
-      if (audioEl.setSinkId) {
-        const sinkId = speakerOn ? 'default' : 'speaker';
-        // For simplicity, we just toggle volume as fallback
-      }
     }
   };
 
@@ -87,12 +81,8 @@ export default function Call() {
   const playRemoteVideo = () => {
     const video = remoteVideoRef.current;
     const stream = remoteStreamRef.current;
-    if (!video || !stream) {
-      console.warn('⚠️ No video element or stream to play');
-      return false;
-    }
+    if (!video || !stream) return false;
 
-    // Ensure srcObject is set
     if (video.srcObject !== stream) {
       video.srcObject = stream;
       video.volume = 1.0;
@@ -113,19 +103,12 @@ export default function Call() {
       });
   };
 
-  // ---- Manual play on button click ----
-  const handlePlayClick = () => {
-    playRemoteVideo();
-  };
+  const handlePlayClick = () => playRemoteVideo();
 
   // ---- useEffect to attach stream when ready ----
   useEffect(() => {
     if (remoteStreamReady && remoteStreamRef.current) {
-      const video = remoteVideoRef.current;
-      if (video) {
-        // Assign and play
-        playRemoteVideo();
-      }
+      playRemoteVideo();
     }
   }, [remoteStreamReady]);
 
@@ -168,11 +151,10 @@ export default function Call() {
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
           remoteStreamRef.current = remoteStream;
-          setRemoteStreamReady(true); // triggers useEffect to attach
+          setRemoteStreamReady(true);
 
           remoteStream.getTracks().forEach(t => t.enabled = true);
 
-          // Audio
           if (remoteAudioRef.current) {
             remoteAudioRef.current.srcObject = remoteStream;
             remoteAudioRef.current.play().catch(() => {});
@@ -327,10 +309,10 @@ export default function Call() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-black">
-      {/* Main video area */}
+    <div className="flex flex-col h-dvh bg-black">
+      {/* Main video area - takes all available space */}
       <div className="flex-1 relative bg-[#0b141a] overflow-hidden">
-        {/* Remote video – always rendered, hidden if no stream */}
+        {/* Remote video */}
         <video
           ref={remoteVideoRef}
           autoPlay
@@ -341,7 +323,6 @@ export default function Call() {
             if (remoteStreamRef.current) setShowPlayButton(true);
           }}
         />
-        {/* Overlay for play button or fallback */}
         {!remoteStreamReady ? (
           <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-28 h-28 rounded-full bg-whatsapp-teal flex items-center justify-center text-white text-4xl font-semibold">
@@ -388,8 +369,8 @@ export default function Call() {
         )}
       </div>
 
-      {/* Controls */}
-      <div className="bg-[#111b21] py-5 flex items-center justify-center gap-6 flex-shrink-0 safe-bottom">
+      {/* Controls – always at bottom with safe area */}
+      <div className="bg-[#111b21] py-4 flex items-center justify-center gap-6 flex-shrink-0 safe-bottom">
         <button
           onClick={toggleMute}
           className={`p-4 rounded-full ${muted ? 'bg-white text-black' : 'bg-[#2a3942] text-white'}`}
@@ -421,6 +402,7 @@ export default function Call() {
         </button>
       </div>
 
+      {/* Hidden audio element */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
