@@ -370,8 +370,8 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative">
-        {/* ===== HEADER - FIXED ===== */}
-        <div className="sticky top-0 z-30 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
+        {/* ===== FIXED HEADER (always visible) ===== */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] md:left-16">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
@@ -397,6 +397,9 @@ export default function ChatWindow() {
             </button>
           </div>
         </div>
+
+        {/* ===== SPACER (to offset fixed header) ===== */}
+        <div className="h-[56px] flex-shrink-0" />
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
@@ -523,9 +526,16 @@ export default function ChatWindow() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
-                          onError={(e) => console.error('Audio load error:', e)}
+                          onError={() => {
+                            console.error('Audio load error for message:', m._id);
+                            // Optionally show a fallback UI
+                          }}
                           className="hidden"
                         />
+                        {/* Fallback if audio fails */}
+                        {!audioRefs.current[m._id]?.src && (
+                          <span className="text-xs text-red-400">Unavailable</span>
+                        )}
                       </div>
                     )}
 
