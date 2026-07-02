@@ -1,11 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle } from 'lucide-react';
+import { MessageCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
+// List of countries with codes and flags
+const countries = [
+  { code: '+92', flag: '🇵🇰', label: 'Pakistan' },
+  { code: '+91', flag: '🇮🇳', label: 'India' },
+  { code: '+1', flag: '🇺🇸', label: 'United States' },
+  { code: '+44', flag: '🇬🇧', label: 'United Kingdom' },
+  { code: '+61', flag: '🇦🇺', label: 'Australia' },
+  { code: '+81', flag: '🇯🇵', label: 'Japan' },
+  { code: '+86', flag: '🇨🇳', label: 'China' },
+  { code: '+49', flag: '🇩🇪', label: 'Germany' },
+  { code: '+33', flag: '🇫🇷', label: 'France' },
+  { code: '+39', flag: '🇮🇹', label: 'Italy' },
+  { code: '+34', flag: '🇪🇸', label: 'Spain' },
+  { code: '+55', flag: '🇧🇷', label: 'Brazil' },
+  { code: '+7', flag: '🇷🇺', label: 'Russia' },
+  { code: '+82', flag: '🇰🇷', label: 'South Korea' },
+  { code: '+966', flag: '🇸🇦', label: 'Saudi Arabia' },
+  { code: '+971', flag: '🇦🇪', label: 'UAE' },
+  { code: '+20', flag: '🇪🇬', label: 'Egypt' },
+  { code: '+27', flag: '🇿🇦', label: 'South Africa' },
+  { code: '+234', flag: '🇳🇬', label: 'Nigeria' },
+  { code: '+254', flag: '🇰🇪', label: 'Kenya' },
+];
+
 export default function Login() {
   const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
   const [name, setName] = useState('');
@@ -17,213 +42,224 @@ export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // ============================================
-  // 1. REQUEST OTP
-  // ============================================
-  async function requestOTP(e) {
+  // ---- Request OTP ----
+  const requestOTP = async (e) => {
     e.preventDefault();
+    if (!phoneNumber.trim()) {
+      setError('Please enter your phone number.');
+      return;
+    }
     setError('');
     setLoading(true);
 
-    console.log('📱 Sending OTP request for:', phoneNumber);
+    const fullNumber = selectedCountry.code + phoneNumber.trim();
 
     try {
-      const res = await api.post('/auth/request-otp', { phoneNumber });
-      console.log('✅ OTP Response:', res.data);
-
+      const res = await api.post('/auth/request-otp', { phoneNumber: fullNumber });
       setIsNewUser(res.data.isNewUser || false);
       setDevOtp(res.data.devOtp || '');
       setStep('otp');
-
     } catch (err) {
-      console.error('❌ OTP Error:', err);
-      console.error('❌ Error Response:', err.response);
       setError(err.response?.data?.message || 'Failed to request OTP. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  // ============================================
-  // 2. VERIFY OTP
-  // ============================================
-  async function verifyOTP(e) {
+  // ---- Verify OTP ----
+  const verifyOTP = async (e) => {
     e.preventDefault();
+    if (!otp.trim()) {
+      setError('Please enter the OTP.');
+      return;
+    }
     setError('');
     setLoading(true);
 
+    const fullNumber = selectedCountry.code + phoneNumber.trim();
+
     try {
-      const payload = { phoneNumber, otp };
+      const payload = { phoneNumber: fullNumber, otp };
       if (isNewUser && name.trim()) {
         payload.name = name.trim();
       }
-
-      console.log('🔍 Verifying OTP payload:', payload);
-
       const res = await api.post('/auth/verify-otp', payload);
-      console.log('✅ Verify Response:', res.data);
-
       if (res.data.success) {
         const userData = res.data.user;
         const tokenData = res.data.token;
-
-        console.log('👤 User Data:', userData);
-        console.log('🔑 User ID:', userData?.id);
-
-        // ✅ IMPORTANT: Check if user has ID
         if (!userData.id) {
-          console.error('❌ User ID is missing in response!');
           setError('Login failed: User ID missing');
           setLoading(false);
           return;
         }
-
-        // Store in localStorage
         localStorage.setItem('token', tokenData);
         localStorage.setItem('user', JSON.stringify(userData));
-
-        // Login via context
         login(userData, tokenData);
-
-        // Wait a bit for context to update
-        setTimeout(() => {
-          navigate('/chats');
-        }, 100);
+        setTimeout(() => navigate('/chats'), 100);
       } else {
         setError(res.data.message || 'Verification failed');
       }
     } catch (err) {
-      console.error('❌ Verify Error:', err);
-      console.error('❌ Error Response:', err.response);
       setError(err.response?.data?.message || 'OTP verification failed. Please try again.');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
-  return (
-    <div className="flex h-screen items-center justify-center bg-[#111b21] px-4">
-      <div className="w-full max-w-sm bg-[#202c33] rounded-lg shadow-xl p-8">
-        {/* Logo and Header */}
-        <div className="flex flex-col items-center mb-6">
-          <div className="w-14 h-14 rounded-full bg-whatsapp-green flex items-center justify-center mb-3">
-            <MessageCircle className="text-black" size={28} />
+  // ---- Helper to format display ----
+  const formatPhoneDisplay = () => {
+    if (!phoneNumber) return selectedCountry.code;
+    return selectedCountry.code + ' ' + phoneNumber;
+  };
+
+  // ---- Render phone step ----
+  if (step === 'phone') {
+    return (
+      <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
+        <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
+          {/* WhatsApp Logo / Icon */}
+          <div className="flex flex-col items-center mb-6">
+            <div className="w-16 h-16 rounded-full bg-whatsapp-green flex items-center justify-center mb-4">
+              <MessageCircle className="text-white" size={32} />
+            </div>
+            <h1 className="text-2xl font-light text-gray-800">WhatsApp Clone</h1>
           </div>
-          <h1 className="text-xl font-semibold text-white">WhatsApp Clone</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            {step === 'phone'
-              ? 'Enter your phone number'
-              : 'Enter OTP sent to your phone'}
-          </p>
-        </div>
 
-        {/* ============================================
-            STEP 1: PHONE NUMBER
-            ============================================ */}
-        {step === 'phone' ? (
-          <form onSubmit={requestOTP} className="space-y-4">
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Phone Number</label>
-              <input
-                type="tel"
-                required
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="+923001234567"
-                className="w-full rounded-md bg-[#2a3942] text-white px-3 py-2 outline-none focus:ring-2 focus:ring-whatsapp-green"
-              />
-              <p className="text-xs text-gray-500 mt-1">
-                Use international format: +923001234567
+          {/* Title */}
+          <h2 className="text-center text-sm font-medium text-gray-600 mb-6">
+            Enter your phone number
+          </h2>
+
+          {/* Phone Input */}
+          <form onSubmit={requestOTP}>
+            <div className="space-y-4">
+              {/* Country selector */}
+              <div className="relative">
+                <select
+                  value={selectedCountry.code}
+                  onChange={(e) => {
+                    const selected = countries.find(c => c.code === e.target.value);
+                    if (selected) setSelectedCountry(selected);
+                  }}
+                  className="w-full appearance-none border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent bg-white"
+                >
+                  {countries.map((country) => (
+                    <option key={country.code} value={country.code}>
+                      {country.flag} {country.code} {country.label}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
+              </div>
+
+              {/* Phone number */}
+              <div>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Phone number</label>
+                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-whatsapp-green focus-within:border-transparent">
+                  <span className="bg-gray-100 px-3 py-3 text-gray-600 font-medium">
+                    {selectedCountry.code}
+                  </span>
+                  <input
+                    type="tel"
+                    value={phoneNumber}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, '');
+                      setPhoneNumber(val);
+                    }}
+                    placeholder="3 0 0 1 2 3 4 5 6 7"
+                    className="flex-1 px-3 py-3 outline-none text-gray-700 placeholder-gray-400"
+                    required
+                  />
+                </div>
+                <p className="text-xs text-gray-400 mt-1">
+                  Use international format
+                </p>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                  <p className="text-sm text-red-600">{error}</p>
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Sending...' : 'Next'}
+              </button>
+
+              <p className="text-center text-xs text-gray-400 mt-4">
+                By continuing, you agree to our Terms & Privacy Policy.
               </p>
             </div>
-
-            {error && (
-              <div className="bg-red-500/20 border border-red-500 rounded-md px-3 py-2">
-                <p className="text-sm text-red-400">{error}</p>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-whatsapp-green text-black font-medium rounded-md py-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Sending...
-                </span>
-              ) : (
-                'Send OTP'
-              )}
-            </button>
-
-            {devOtp && (
-              <p className="text-xs text-gray-400 text-center">
-                (Testing OTP: <span className="font-mono text-yellow-400">{devOtp}</span>)
-              </p>
-            )}
           </form>
-        ) : (
-          /* ============================================
-             STEP 2: OTP VERIFICATION
-             ============================================ */
-          <form onSubmit={verifyOTP} className="space-y-4">
+        </div>
+      </div>
+    );
+  }
+
+  // ---- OTP verification step ----
+  return (
+    <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
+        <div className="flex flex-col items-center mb-6">
+          <div className="w-16 h-16 rounded-full bg-whatsapp-green flex items-center justify-center mb-4">
+            <MessageCircle className="text-white" size={32} />
+          </div>
+          <h1 className="text-2xl font-light text-gray-800">WhatsApp Clone</h1>
+        </div>
+
+        <h2 className="text-center text-sm font-medium text-gray-600 mb-6">
+          Enter the OTP sent to {formatPhoneDisplay()}
+        </h2>
+
+        <form onSubmit={verifyOTP}>
+          <div className="space-y-4">
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Enter OTP</label>
               <input
                 type="text"
-                required
                 value={otp}
-                onChange={(e) => setOtp(e.target.value)}
-                placeholder="6-digit OTP"
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
+                placeholder="6-digit code"
                 maxLength={6}
-                className="w-full rounded-md bg-[#2a3942] text-white px-3 py-2 outline-none focus:ring-2 focus:ring-whatsapp-green"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
+                required
               />
-              <p className="text-xs text-gray-500 mt-1">
-                {devOtp && `Testing OTP: ${devOtp}`}
-              </p>
+              {devOtp && (
+                <p className="text-xs text-gray-400 text-center mt-2">
+                  Testing OTP: <span className="font-mono text-whatsapp-green">{devOtp}</span>
+                </p>
+              )}
             </div>
 
             {isNewUser && (
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Your Name</label>
+                <label className="block text-xs font-medium text-gray-500 mb-1">Your name</label>
                 <input
                   type="text"
-                  required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full rounded-md bg-[#2a3942] text-white px-3 py-2 outline-none focus:ring-2 focus:ring-whatsapp-green"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
+                  required
                 />
               </div>
             )}
 
             {error && (
-              <div className="bg-red-500/20 border border-red-500 rounded-md px-3 py-2">
-                <p className="text-sm text-red-400">{error}</p>
+              <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                <p className="text-sm text-red-600">{error}</p>
               </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-whatsapp-green text-black font-medium rounded-md py-2 hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-5 w-5 text-black" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                  </svg>
-                  Verifying...
-                </span>
-              ) : (
-                'Verify & Login'
-              )}
+              {loading ? 'Verifying...' : 'Verify & Login'}
             </button>
 
             <button
@@ -231,13 +267,14 @@ export default function Login() {
               onClick={() => {
                 setStep('phone');
                 setError('');
+                setOtp('');
               }}
-              className="text-sm text-gray-400 hover:underline w-full text-center"
+              className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors"
             >
               ← Go back
             </button>
-          </form>
-        )}
+          </div>
+        </form>
       </div>
     </div>
   );
