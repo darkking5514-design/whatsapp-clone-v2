@@ -31,7 +31,7 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Voice recording
+  // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -249,16 +249,12 @@ export default function ChatWindow() {
     }
   };
 
+  // ---- Send voice message with duration (using recordingTime) ----
   const sendVoiceMessage = async () => {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      const audio = new Audio();
-      audio.src = audioURL;
-      await new Promise((resolve) => {
-        audio.onloadedmetadata = () => resolve();
-      });
-      const duration = Math.round(audio.duration);
+      const duration = recordingTime; // Use the recorded seconds directly
 
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
       const formData = new FormData();
@@ -526,16 +522,9 @@ export default function ChatWindow() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
-                          onError={() => {
-                            console.error('Audio load error for message:', m._id);
-                            // Optionally show a fallback UI
-                          }}
+                          onError={() => console.error('Audio load error for:', m._id)}
                           className="hidden"
                         />
-                        {/* Fallback if audio fails */}
-                        {!audioRefs.current[m._id]?.src && (
-                          <span className="text-xs text-red-400">Unavailable</span>
-                        )}
                       </div>
                     )}
 
