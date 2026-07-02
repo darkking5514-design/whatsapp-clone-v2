@@ -45,6 +45,7 @@ export default function Call() {
   const [remoteConnected, setRemoteConnected] = useState(false);
   const [iceState, setIceState] = useState('new');
   const [showPlayButton, setShowPlayButton] = useState(false);
+  const [remoteStreamReady, setRemoteStreamReady] = useState(false);
 
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
@@ -55,23 +56,39 @@ export default function Call() {
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
 
-  // ---- Helper: play remote stream ----
-  const playRemoteStream = () => {
+  // ---- Function to attach and play remote stream ----
+  const playRemoteVideo = () => {
     const video = remoteVideoRef.current;
-    if (!video || !remoteStreamRef.current) return;
-    video.srcObject = remoteStreamRef.current;
-    video.volume = 1.0;
-    video.muted = false;
-    video.load();
-    video.play()
+    const stream = remoteStreamRef.current;
+    if (!video || !stream) return false;
+
+    // Assign stream if not already set
+    if (!video.srcObject) {
+      video.srcObject = stream;
+      video.volume = 1.0;
+      video.muted = false;
+      video.load();
+    }
+
+    // Attempt to play
+    return video.play()
       .then(() => {
         console.log('✅ Remote video playing');
         setShowPlayButton(false);
+        return true;
       })
       .catch(err => {
-        console.warn('⚠️ Play blocked:', err.name);
-        setShowPlayButton(true);
+        console.warn('⚠️ Play failed:', err.name);
+        if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
+          setShowPlayButton(true);
+        }
+        return false;
       });
+  };
+
+  // ---- Manual play on button click ----
+  const handlePlayClick = () => {
+    playRemoteVideo();
   };
 
   // ---- Main setup ----
@@ -94,13 +111,11 @@ export default function Call() {
         const pc = new RTCPeerConnection(ICE_SERVERS);
         pcRef.current = pc;
 
-        // Add local tracks
         stream.getTracks().forEach(track => {
           console.log('➕ Adding track:', track.kind);
           pc.addTrack(track, stream);
         });
 
-        // ---- Remote track handler ----
         pc.ontrack = (event) => {
           console.log('📡 Remote track received:', event.track.kind);
           setRemoteConnected(true);
@@ -109,6 +124,7 @@ export default function Call() {
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
           remoteStreamRef.current = remoteStream;
+          setRemoteStreamReady(true);
 
           // Enable all tracks
           remoteStream.getTracks().forEach(t => t.enabled = true);
@@ -119,13 +135,12 @@ export default function Call() {
             remoteAudioRef.current.play().catch(() => {});
           }
 
-          // Video
-          if (callType === 'video' && remoteVideoRef.current) {
-            playRemoteStream();
+          // Video – try to play immediately
+          if (callType === 'video') {
+            playRemoteVideo();
           }
         };
 
-        // ---- ICE candidates ----
         pc.onicecandidate = (event) => {
           if (event.candidate) {
             socket?.emit('call_ice_candidate', {
@@ -136,7 +151,6 @@ export default function Call() {
           }
         };
 
-        // ---- ICE connection state ----
         pc.oniceconnectionstatechange = () => {
           const state = pc.iceConnectionState;
           setIceState(state);
@@ -149,9 +163,7 @@ export default function Call() {
           }
         };
 
-        // ---- Caller: create offer ----
         if (isCaller) {
-          console.log('📤 Creating offer...');
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket?.emit('call_offer', {
@@ -161,18 +173,13 @@ export default function Call() {
             callType,
             callerName: user.name,
           });
-          console.log('📤 Offer sent, waiting for answer...');
-        } 
-        // ---- Callee: handle incoming offer ----
-        else if (incomingOffer) {
-          console.log('📥 Received offer, setting remote description...');
+          console.log('📤 Offer sent');
+        } else if (incomingOffer) {
           await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
-          // Add any buffered candidates
           for (const cand of pendingCandidatesRef.current) {
             try { await pc.addIceCandidate(new RTCIceCandidate(cand)); } catch (e) {}
           }
           pendingCandidatesRef.current = [];
-
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket?.emit('call_answer', {
@@ -180,7 +187,7 @@ export default function Call() {
             from: user.id,
             answer: pc.localDescription,
           });
-          console.log('📤 Answer sent to caller');
+          console.log('📤 Answer sent');
         }
 
       } catch (err) {
@@ -191,7 +198,6 @@ export default function Call() {
 
     setup();
 
-    // ---- Socket listeners ----
     const onCallAnswer = ({ from, answer }) => {
       if (from !== otherUserId) return;
       console.log('📥 Received answer from', from);
@@ -199,8 +205,6 @@ export default function Call() {
       if (!pc) return;
       pc.setRemoteDescription(new RTCSessionDescription(answer))
         .then(() => {
-          console.log('✅ Remote description set (answer)');
-          // Add any pending candidates
           for (const cand of pendingCandidatesRef.current) {
             pc.addIceCandidate(new RTCIceCandidate(cand)).catch(() => {});
           }
@@ -246,7 +250,6 @@ export default function Call() {
     };
   }, []);
 
-  // ---- Cleanup ----
   const cleanup = () => {
     localStreamRef.current?.getTracks().forEach(t => t.stop());
     if (pcRef.current) pcRef.current.close();
@@ -254,6 +257,7 @@ export default function Call() {
     remoteStreamRef.current = null;
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
+    setRemoteStreamReady(false);
   };
 
   const endCall = (notify = true) => {
@@ -282,23 +286,25 @@ export default function Call() {
     setVideoOff(!videoOff);
   };
 
-  // ---- Render ----
   return (
-    <div className="flex flex-col h-screen bg-black relative">
-      <div className="flex-1 flex items-center justify-center bg-[#0b141a] relative overflow-hidden">
-        {callType === 'video' && remoteStreamRef.current ? (
-          <div className="relative w-full h-full">
+    <div className="flex flex-col h-screen bg-black">
+      {/* Main video area - takes all available space */}
+      <div className="flex-1 relative bg-[#0b141a] overflow-hidden">
+        {callType === 'video' && remoteStreamReady ? (
+          <>
             <video
               ref={remoteVideoRef}
               autoPlay
               playsInline
               className="w-full h-full object-cover"
               onPlay={() => setShowPlayButton(false)}
-              onPause={() => { if (remoteStreamRef.current) setShowPlayButton(true); }}
+              onPause={() => {
+                if (remoteStreamRef.current) setShowPlayButton(true);
+              }}
             />
             {showPlayButton && (
               <button
-                onClick={playRemoteStream}
+                onClick={handlePlayClick}
                 className="absolute inset-0 flex items-center justify-center bg-black/60 text-white z-10"
               >
                 <div className="flex flex-col items-center gap-2">
@@ -307,9 +313,9 @@ export default function Call() {
                 </div>
               </button>
             )}
-          </div>
+          </>
         ) : (
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col items-center justify-center h-full gap-3">
             <div className="w-28 h-28 rounded-full bg-whatsapp-teal flex items-center justify-center text-white text-4xl font-semibold">
               {(calleeName || 'U')[0].toUpperCase()}
             </div>
@@ -319,24 +325,27 @@ export default function Call() {
           </div>
         )}
 
+        {/* Local video - picture-in-picture */}
         {callType === 'video' && (
           <video
             ref={localVideoRef}
             autoPlay
             playsInline
             muted
-            className="absolute bottom-4 right-4 w-28 h-40 md:w-36 md:h-48 rounded-lg object-cover border-2 border-white/30 bg-black"
+            className="absolute bottom-20 right-4 w-28 h-40 md:w-36 md:h-48 rounded-lg object-cover border-2 border-white/30 bg-black z-20"
           />
         )}
 
+        {/* Status badge */}
         {remoteConnected && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-xs">
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-xs z-20">
             {callStatus}
           </div>
         )}
       </div>
 
-      <div className="bg-[#111b21] py-5 flex items-center justify-center gap-6">
+      {/* Controls - always at bottom */}
+      <div className="bg-[#111b21] py-5 flex items-center justify-center gap-6 flex-shrink-0 safe-bottom">
         <button
           onClick={toggleMute}
           className={`p-4 rounded-full ${muted ? 'bg-white text-black' : 'bg-[#2a3942] text-white'}`}
@@ -361,6 +370,7 @@ export default function Call() {
         </button>
       </div>
 
+      {/* Hidden audio element for remote audio */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
