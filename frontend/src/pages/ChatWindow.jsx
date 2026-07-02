@@ -31,12 +31,12 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // ---- Voice recording states ----
+  // Voice recording
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioURL, setAudioURL] = useState('');
-  const [audioPlaying, setAudioPlaying] = useState(null); // message id
+  const [audioPlaying, setAudioPlaying] = useState(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
@@ -207,9 +207,7 @@ export default function ChatWindow() {
       audioChunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) audioChunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
@@ -251,18 +249,15 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Send voice message with duration ----
   const sendVoiceMessage = async () => {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      // Compute duration using Audio object
+      // Compute duration
       const audio = new Audio();
       audio.src = audioURL;
       await new Promise((resolve) => {
-        audio.onloadedmetadata = () => {
-          resolve();
-        };
+        audio.onloadedmetadata = () => resolve();
       });
       const duration = Math.round(audio.duration);
 
@@ -282,7 +277,6 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Audio playback toggle ----
   const toggleAudioPlay = (messageId, url) => {
     if (audioPlaying === messageId) {
       const audio = audioRefs.current[messageId];
@@ -303,7 +297,6 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Format duration (seconds -> mm:ss) ----
   const formatDuration = (seconds) => {
     if (!seconds || isNaN(seconds)) return '0:00';
     const mins = Math.floor(seconds / 60);
@@ -357,7 +350,6 @@ export default function ChatWindow() {
     document.body.removeChild(link);
   };
 
-  // ---- Call functions ----
   const startCall = (callType) => {
     navigate(`/call/${otherUserId}`, {
       state: { isCaller: true, callType, calleeName: otherUser?.name },
@@ -378,9 +370,9 @@ export default function ChatWindow() {
         <Sidebar />
       </div>
 
-      <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== STICKY HEADER (always visible) ===== */}
-        <div className="sticky top-0 z-30 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
+      <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full relative">
+        {/* ===== FIXED HEADER (always on top) ===== */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] md:left-16">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
@@ -406,6 +398,9 @@ export default function ChatWindow() {
             </button>
           </div>
         </div>
+
+        {/* ===== SPACER to offset fixed header ===== */}
+        <div className="h-[56px] flex-shrink-0" />
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
@@ -504,7 +499,7 @@ export default function ChatWindow() {
                       </a>
                     )}
 
-                    {/* ===== VOICE MESSAGE (WhatsApp Style) ===== */}
+                    {/* ===== VOICE MESSAGE ===== */}
                     {m.messageType === 'audio' && m.mediaUrl && (
                       <div className="flex items-center gap-3 min-w-[160px]">
                         <button
@@ -532,6 +527,7 @@ export default function ChatWindow() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
+                          onError={(e) => console.error('Audio load error:', e)}
                           className="hidden"
                         />
                       </div>
@@ -669,7 +665,7 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* ===== FORWARD MODAL ===== */}
+      {/* Forward Modal */}
       {showForwardModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
           <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[80vh]">
