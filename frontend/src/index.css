@@ -10,6 +10,7 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -24,6 +25,7 @@ body {
 
 #root {
   height: 100%;
+  height: 100dvh;
   width: 100%;
   overflow: hidden;
 }
@@ -42,42 +44,6 @@ body {
 ::-webkit-scrollbar-thumb {
   background-color: #2f3b41;
   border-radius: 2px;
-}
-
-/* ============================================
-   FORCE CHAT HEADER - ALWAYS VISIBLE
-   This is the most important fix!
-   ============================================ */
-
-/* Target the exact header div - Force visible! */
-.bg-\[\#202c33\].px-2\ py-2,
-.bg-\[\#202c33\].px-2.py-2 {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  min-height: 56px !important;
-  max-height: 64px !important;
-  background-color: #202c33 !important;
-  border-bottom: 1px solid #2f3b41 !important;
-  position: relative !important;
-  z-index: 999 !important;
-  transform: translateY(0) !important;
-  top: 0 !important;
-  width: 100% !important;
-  flex-shrink: 0 !important;
-}
-
-/* Ensure all children are visible too */
-.bg-\[\#202c33\].px-2.py-2 * {
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
-/* Make sure the chat area doesn't hide header */
-.flex.flex-col.h-screen.bg-whatsapp-chatbg {
-  padding-top: 0 !important;
-  margin-top: 0 !important;
-  min-height: 100dvh !important;
 }
 
 /* Prevent any overflow issues */
@@ -187,41 +153,4 @@ body {
   .safe-top {
     padding-top: max(10px, env(safe-area-inset-top, 10px));
   }
-}
-
-/* ============================================
-   SUPER FINAL FIX - STICKY HEADER
-   ============================================ */
-@media (max-width: 768px) {
-  /* Force the sticky header to always show */
-  .sticky.top-0 {
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 9999 !important;
-    display: flex !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-    min-height: 56px !important;
-    background-color: #202c33 !important;
-    border-bottom: 1px solid #2f3b41 !important;
-  }
-  
-  /* Prevent any overflow hiding */
-  .flex.flex-col.h-screen.bg-whatsapp-chatbg {
-    overflow: hidden !important;
-  }
-}
-/* ============================================
-   FORCE FIXED HEADER VISIBLE
-   ============================================ */
-div[style*="position: fixed"] {
-  display: flex !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-  z-index: 999999 !important;
-  top: 0 !important;
-  left: 0 !important;
-  right: 0 !important;
-  min-height: 56px !important;
-  background-color: #202c33 !important;
 }

@@ -31,7 +31,7 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Voice recording states
+  // Voice recording
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -40,6 +40,7 @@ export default function ChatWindow() {
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
+  const recordingStartRef = useRef(null);
   const audioRefs = useRef({});
 
   // ---- Load other user ----
@@ -221,6 +222,7 @@ export default function ChatWindow() {
       mediaRecorder.start();
       setIsRecording(true);
       setRecordingTime(0);
+      recordingStartRef.current = Date.now();
       recordingTimerRef.current = setInterval(() => {
         setRecordingTime(prev => prev + 1);
       }, 1000);
@@ -235,6 +237,13 @@ export default function ChatWindow() {
       mediaRecorderRef.current.stop();
       clearInterval(recordingTimerRef.current);
       setIsRecording(false);
+      // Recompute the final duration from the actual elapsed time rather than
+      // relying only on the 1-second interval ticks, so short recordings
+      // (e.g. under 1s) still get a correct, non-zero duration.
+      if (recordingStartRef.current) {
+        const elapsed = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
+        setRecordingTime(elapsed);
+      }
     }
   };
 
@@ -249,12 +258,15 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Send voice message with duration (using recordingTime) ----
   const sendVoiceMessage = async () => {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      const duration = recordingTime; // Use the recorded seconds directly
+      // Reading `.duration` off a freshly recorded webm Blob via new Audio()
+      // is unreliable (Chrome/Android often reports Infinity/NaN until the
+      // media is seeked). We already track elapsed seconds while recording
+      // via `recordingTime`, so just use that directly instead.
+      const duration = recordingTime;
 
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
       const formData = new FormData();
@@ -360,14 +372,20 @@ export default function ChatWindow() {
   };
 
   return (
-    <div className="flex h-screen bg-[#111b21] overflow-hidden">
+    <div className="flex h-dvh bg-[#111b21] overflow-hidden">
       <div className="hidden md:block">
         <Sidebar />
       </div>
 
-      <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative">
-        {/* ===== FIXED HEADER (always visible) ===== */}
-        <div className="fixed top-0 left-0 right-0 z-50 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] md:left-16">
+      <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative min-h-0">
+        {/* ===== HEADER (part of normal flex flow, not `fixed`) =====
+            NOTE: we intentionally do NOT use `position: fixed` here.
+            On mobile browsers the visible viewport height changes as the
+            address bar shows/hides, which combined with `overflow:hidden`
+            on html/body made a fixed header end up clipped or pushed off
+            screen. `sticky` inside this flex column achieves the same
+            "always visible while scrolling" behavior without that problem. */}
+        <div className="sticky top-0 z-20 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
@@ -393,9 +411,6 @@ export default function ChatWindow() {
             </button>
           </div>
         </div>
-
-        {/* ===== SPACER (to offset fixed header) ===== */}
-        <div className="h-[56px] flex-shrink-0" />
 
         {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
@@ -522,9 +537,16 @@ export default function ChatWindow() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
-                          onError={() => console.error('Audio load error for:', m._id)}
+                          onError={() => {
+                            console.error('Audio load error for message:', m._id);
+                            // Optionally show a fallback UI
+                          }}
                           className="hidden"
                         />
+                        {/* Fallback if audio fails */}
+                        {!audioRefs.current[m._id]?.src && (
+                          <span className="text-xs text-red-400">Unavailable</span>
+                        )}
                       </div>
                     )}
 
