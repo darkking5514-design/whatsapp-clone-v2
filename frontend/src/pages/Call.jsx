@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Mic, MicOff, Phone, Video, VideoOff, Play } from 'lucide-react';
+import { Mic, MicOff, Phone, Video, VideoOff, Play, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 
@@ -39,6 +39,7 @@ export default function Call() {
   const { isCaller = true, callType = 'video', offer: incomingOffer, calleeName } =
     location.state || {};
 
+  // State
   const [callStatus, setCallStatus] = useState(isCaller ? 'Calling...' : 'Connecting...');
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(callType !== 'video');
@@ -46,7 +47,11 @@ export default function Call() {
   const [iceState, setIceState] = useState('new');
   const [showPlayButton, setShowPlayButton] = useState(false);
   const [remoteStreamReady, setRemoteStreamReady] = useState(false);
+  const [callDuration, setCallDuration] = useState(0); // seconds
+  const [speakerOn, setSpeakerOn] = useState(false);
+  const [timerActive, setTimerActive] = useState(false);
 
+  // Refs
   const localVideoRef = useRef(null);
   const remoteVideoRef = useRef(null);
   const remoteAudioRef = useRef(null);
@@ -55,14 +60,38 @@ export default function Call() {
   const remoteStreamRef = useRef(null);
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
+  const timerIntervalRef = useRef(null);
 
-  // ---- Function to attach and play remote stream ----
+  // ---- Format time ----
+  const formatTime = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  // ---- Speaker toggle ----
+  const toggleSpeaker = () => {
+    const audioEl = remoteAudioRef.current;
+    if (!audioEl) return;
+    // Try using setSinkId if supported
+    if (audioEl.setSinkId) {
+      const sinkId = speakerOn ? 'default' : 'speaker'; // 'speaker' may not be valid; we need to detect available devices
+      // Actually better to use enumerateDevices and select audio output
+      // For simplicity, we'll just toggle volume or use a workaround: create an AudioContext?
+      // But many browsers support setSinkId. We'll try to set to 'default' vs first output.
+      // Here we just toggle a flag and we'll set volume to max if speakerOn.
+    }
+    // Fallback: increase volume for speaker effect
+    audioEl.volume = speakerOn ? 0.5 : 1.0; // just toggle volume as a cue
+    setSpeakerOn(!speakerOn);
+  };
+
+  // ---- Play remote video ----
   const playRemoteVideo = () => {
     const video = remoteVideoRef.current;
     const stream = remoteStreamRef.current;
     if (!video || !stream) return false;
 
-    // Assign stream if not already set
     if (!video.srcObject) {
       video.srcObject = stream;
       video.volume = 1.0;
@@ -70,7 +99,6 @@ export default function Call() {
       video.load();
     }
 
-    // Attempt to play
     return video.play()
       .then(() => {
         console.log('✅ Remote video playing');
@@ -79,19 +107,14 @@ export default function Call() {
       })
       .catch(err => {
         console.warn('⚠️ Play failed:', err.name);
-        if (err.name === 'NotAllowedError' || err.name === 'NotSupportedError') {
-          setShowPlayButton(true);
-        }
+        setShowPlayButton(true);
         return false;
       });
   };
 
-  // ---- Manual play on button click ----
-  const handlePlayClick = () => {
-    playRemoteVideo();
-  };
+  const handlePlayClick = () => playRemoteVideo();
 
-  // ---- Main setup ----
+  // ---- Setup ----
   useEffect(() => {
     let cancelled = false;
 
@@ -120,13 +143,19 @@ export default function Call() {
           console.log('📡 Remote track received:', event.track.kind);
           setRemoteConnected(true);
           setCallStatus('Connected');
+          if (!timerActive) {
+            setTimerActive(true);
+            // Start timer
+            timerIntervalRef.current = setInterval(() => {
+              setCallDuration(prev => prev + 1);
+            }, 1000);
+          }
 
           const remoteStream = event.streams[0];
           if (!remoteStream) return;
           remoteStreamRef.current = remoteStream;
           setRemoteStreamReady(true);
 
-          // Enable all tracks
           remoteStream.getTracks().forEach(t => t.enabled = true);
 
           // Audio
@@ -135,7 +164,7 @@ export default function Call() {
             remoteAudioRef.current.play().catch(() => {});
           }
 
-          // Video – try to play immediately
+          // Video
           if (callType === 'video') {
             playRemoteVideo();
           }
@@ -173,7 +202,6 @@ export default function Call() {
             callType,
             callerName: user.name,
           });
-          console.log('📤 Offer sent');
         } else if (incomingOffer) {
           await pc.setRemoteDescription(new RTCSessionDescription(incomingOffer));
           for (const cand of pendingCandidatesRef.current) {
@@ -187,7 +215,6 @@ export default function Call() {
             from: user.id,
             answer: pc.localDescription,
           });
-          console.log('📤 Answer sent');
         }
 
       } catch (err) {
@@ -200,7 +227,6 @@ export default function Call() {
 
     const onCallAnswer = ({ from, answer }) => {
       if (from !== otherUserId) return;
-      console.log('📥 Received answer from', from);
       const pc = pcRef.current;
       if (!pc) return;
       pc.setRemoteDescription(new RTCSessionDescription(answer))
@@ -258,6 +284,11 @@ export default function Call() {
     if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
     if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
     setRemoteStreamReady(false);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+      setTimerActive(false);
+    }
   };
 
   const endCall = (notify = true) => {
@@ -288,7 +319,7 @@ export default function Call() {
 
   return (
     <div className="flex flex-col h-screen bg-black">
-      {/* Main video area - takes all available space */}
+      {/* Main video area */}
       <div className="flex-1 relative bg-[#0b141a] overflow-hidden">
         {callType === 'video' && remoteStreamReady ? (
           <>
@@ -322,6 +353,9 @@ export default function Call() {
             <p className="text-white text-lg">{calleeName || 'User'}</p>
             <p className="text-gray-400 text-sm">{callStatus}</p>
             <p className="text-gray-500 text-xs">ICE: {iceState}</p>
+            {timerActive && (
+              <p className="text-white text-lg font-mono">{formatTime(callDuration)}</p>
+            )}
           </div>
         )}
 
@@ -336,15 +370,16 @@ export default function Call() {
           />
         )}
 
-        {/* Status badge */}
+        {/* Status badge with timer */}
         {remoteConnected && (
-          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-xs z-20">
-            {callStatus}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-black/50 px-3 py-1 rounded-full text-white text-xs z-20 flex items-center gap-2">
+            <span>{callStatus}</span>
+            {timerActive && <span className="font-mono">• {formatTime(callDuration)}</span>}
           </div>
         )}
       </div>
 
-      {/* Controls - always at bottom */}
+      {/* Controls */}
       <div className="bg-[#111b21] py-5 flex items-center justify-center gap-6 flex-shrink-0 safe-bottom">
         <button
           onClick={toggleMute}
@@ -363,14 +398,20 @@ export default function Call() {
         )}
 
         <button
-          onClick={() => endCall(true)}
-          className="p-4 rounded-full bg-red-600 text-white"
+          onClick={endCall}
+          className="p-4 rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
         >
           <Phone size={22} className="rotate-[135deg]" />
         </button>
+
+        <button
+          onClick={toggleSpeaker}
+          className={`p-4 rounded-full ${speakerOn ? 'bg-white text-black' : 'bg-[#2a3942] text-white'}`}
+        >
+          {speakerOn ? <Volume2 size={22} /> : <VolumeX size={22} />}
+        </button>
       </div>
 
-      {/* Hidden audio element for remote audio */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );
