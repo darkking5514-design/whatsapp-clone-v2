@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video, 
-  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause, Volume2, VolumeX
+  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
 } from 'lucide-react';
 import api, { SOCKET_URL } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -31,7 +31,7 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Voice recording states
+  // ---- Voice recording states ----
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -142,7 +142,7 @@ export default function ChatWindow() {
     }, 1500);
   };
 
-  // ---- Send message (text/media) ----
+  // ---- Send message ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
@@ -213,9 +213,9 @@ export default function ChatWindow() {
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-        setAudioBlob(audioBlob);
-        const url = URL.createObjectURL(audioBlob);
+        const blob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        setAudioBlob(blob);
+        const url = URL.createObjectURL(blob);
         setAudioURL(url);
         stream.getTracks().forEach(track => track.stop());
       };
@@ -251,17 +251,28 @@ export default function ChatWindow() {
     }
   };
 
+  // ---- Send voice message with duration ----
   const sendVoiceMessage = async () => {
     if (!audioBlob) return;
     setUploading(true);
     try {
+      // Compute duration using Audio object
+      const audio = new Audio();
+      audio.src = audioURL;
+      await new Promise((resolve) => {
+        audio.onloadedmetadata = () => {
+          resolve();
+        };
+      });
+      const duration = Math.round(audio.duration);
+
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
       const formData = new FormData();
       formData.append('media', file);
       const res = await api.post('/messages/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      sendMessage({ mediaUrl: res.data.mediaUrl, messageType: 'audio', content: '' });
+      sendMessage({ mediaUrl: res.data.mediaUrl, messageType: 'audio', content: '', duration });
       setAudioBlob(null);
       setAudioURL('');
     } catch (err) {
@@ -271,16 +282,15 @@ export default function ChatWindow() {
     }
   };
 
+  // ---- Audio playback toggle ----
   const toggleAudioPlay = (messageId, url) => {
     if (audioPlaying === messageId) {
-      // pause
       const audio = audioRefs.current[messageId];
       if (audio) {
         audio.pause();
         setAudioPlaying(null);
       }
     } else {
-      // pause any other
       if (audioPlaying) {
         const prev = audioRefs.current[audioPlaying];
         if (prev) prev.pause();
@@ -291,6 +301,14 @@ export default function ChatWindow() {
         setAudioPlaying(messageId);
       }
     }
+  };
+
+  // ---- Format duration (seconds -> mm:ss) ----
+  const formatDuration = (seconds) => {
+    if (!seconds || isNaN(seconds)) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
   // ---- Reply / Forward / Delete / Download ----
@@ -354,14 +372,6 @@ export default function ChatWindow() {
     return <Check size={16} className="text-gray-400" />;
   };
 
-  // Format duration (seconds -> mm:ss)
-  const formatDuration = (seconds) => {
-    if (!seconds) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
   return (
     <div className="flex h-screen bg-[#111b21]">
       <div className="hidden md:block">
@@ -369,7 +379,7 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* ===== STICKY HEADER ===== */}
+        {/* ===== STICKY HEADER (always visible) ===== */}
         <div className="sticky top-0 z-30 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
@@ -414,7 +424,7 @@ export default function ChatWindow() {
           </div>
         )}
 
-        {/* ===== MESSAGES (SCROLLABLE) ===== */}
+        {/* ===== MESSAGES ===== */}
         <div className="flex-1 overflow-y-auto px-3 md:px-10 py-4 space-y-2">
           {messages.length === 0 && (
             <p className="text-gray-400 text-center mt-10 text-sm">No messages yet. Say hello! 👋</p>
@@ -449,7 +459,6 @@ export default function ChatWindow() {
                     <p className="text-[10px] text-gray-400 italic mb-1">Forwarded</p>
                   )}
 
-                  {/* ===== MESSAGE BUBBLE ===== */}
                   <div
                     className={`rounded-lg px-3 py-2 text-sm shadow ${
                       isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
@@ -512,7 +521,7 @@ export default function ChatWindow() {
                           />
                         </div>
                         <span className="text-xs text-gray-300 whitespace-nowrap">
-                          {formatDuration(m.duration || 0)}
+                          {formatDuration(m.duration)}
                         </span>
                         <audio
                           ref={(el) => { audioRefs.current[m._id] = el; }}
@@ -576,7 +585,7 @@ export default function ChatWindow() {
           <div ref={bottomRef} />
         </div>
 
-        {/* ===== INPUT AREA (Sticky at bottom) ===== */}
+        {/* ===== INPUT AREA ===== */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           {/* Attachment */}
           <input

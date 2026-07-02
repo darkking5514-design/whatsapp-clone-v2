@@ -40,11 +40,21 @@ function initSocket(io) {
     });
 
     // ============================================
-    // SEND MESSAGE
+    // SEND MESSAGE (with duration for audio)
     // ============================================
     socket.on('send_message', async (data, ack) => {
       try {
-        const { senderId, receiverId, content, mediaUrl, messageType, replyTo, forwarded, originalSender } = data;
+        const {
+          senderId,
+          receiverId,
+          content,
+          mediaUrl,
+          messageType,
+          replyTo,
+          forwarded,
+          originalSender,
+          duration, // 👈 new field
+        } = data;
 
         console.log(`📤 Sending message from ${senderId} to ${receiverId}`);
 
@@ -68,6 +78,7 @@ function initSocket(io) {
           replyTo: replyTo || null,
           forwarded: forwarded || false,
           originalSender: originalSender || null,
+          duration: duration || 0, // store duration
           timestamp: new Date(),
         });
 

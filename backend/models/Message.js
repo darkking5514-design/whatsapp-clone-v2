@@ -30,9 +30,7 @@ const messageSchema = new mongoose.Schema(
       enum: ['sent', 'delivered', 'read'],
       default: 'sent',
     },
-    // ============================================
-    // NEW FIELDS FOR REPLY, FORWARD, DELETE
-    // ============================================
+    // ---- Reply, Forward, Delete ----
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Message',
@@ -55,6 +53,11 @@ const messageSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.ObjectId],
       default: [],
     },
+    // ---- NEW: Duration for voice messages ----
+    duration: {
+      type: Number,
+      default: 0, // seconds
+    },
     timestamp: {
       type: Date,
       default: Date.now,
@@ -63,6 +66,7 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Index for efficient message retrieval
 messageSchema.index({ sender: 1, receiver: 1, timestamp: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
