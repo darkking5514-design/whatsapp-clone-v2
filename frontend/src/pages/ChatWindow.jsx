@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { 
   ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video, 
-  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
+  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause, Volume2, VolumeX
 } from 'lucide-react';
 import api, { SOCKET_URL } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -30,17 +30,17 @@ export default function ChatWindow() {
   const [selectedUsers, setSelectedUsers] = useState([]);
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
-  const messagesContainerRef = useRef(null);
 
-  // ---- Voice recording states ----
+  // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
   const [audioURL, setAudioURL] = useState('');
-  const [isPlaying, setIsPlaying] = useState(false);
+  const [audioPlaying, setAudioPlaying] = useState(null); // message id
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const recordingTimerRef = useRef(null);
+  const audioRefs = useRef({});
 
   // ---- Load other user ----
   useEffect(() => {
@@ -217,7 +217,6 @@ export default function ChatWindow() {
         setAudioBlob(audioBlob);
         const url = URL.createObjectURL(audioBlob);
         setAudioURL(url);
-        // stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
 
@@ -272,20 +271,73 @@ export default function ChatWindow() {
     }
   };
 
-  const playAudio = () => {
-    const audio = document.getElementById('voice-preview');
-    if (audio) {
-      if (isPlaying) {
+  const toggleAudioPlay = (messageId, url) => {
+    if (audioPlaying === messageId) {
+      // pause
+      const audio = audioRefs.current[messageId];
+      if (audio) {
         audio.pause();
-      } else {
-        audio.play();
+        setAudioPlaying(null);
       }
-      setIsPlaying(!isPlaying);
+    } else {
+      // pause any other
+      if (audioPlaying) {
+        const prev = audioRefs.current[audioPlaying];
+        if (prev) prev.pause();
+      }
+      const audio = audioRefs.current[messageId];
+      if (audio) {
+        audio.play().catch(() => {});
+        setAudioPlaying(messageId);
+      }
     }
   };
 
   // ---- Reply / Forward / Delete / Download ----
-  // (same as before, keep them)
+  const handleReply = (message) => {
+    setReplyTo(message);
+    setShowMessageMenu(null);
+    document.getElementById('messageInput')?.focus();
+  };
+
+  const handleForward = (message) => {
+    setForwardMessage(message);
+    setShowMessageMenu(null);
+    setShowForwardModal(true);
+  };
+
+  const handleDelete = (message, deleteFor) => {
+    if (!message) return;
+    socket.emit('delete_message', {
+      messageId: message._id,
+      deleteFor,
+      senderId: user.id,
+      receiverId: otherUserId,
+    });
+    api.delete(`/messages/${message._id}?deleteFor=${deleteFor}`)
+      .then(() => {
+        if (deleteFor === 'everyone') {
+          setMessages(prev => prev.map(m =>
+            m._id === message._id ? { ...m, deleted: true } : m
+          ));
+        } else {
+          setMessages(prev => prev.filter(m => m._id !== message._id));
+        }
+      })
+      .catch(err => console.error('Delete error:', err));
+    setShowMessageMenu(null);
+  };
+
+  const downloadMedia = (mediaUrl, messageType) => {
+    const fullUrl = `${SOCKET_URL}${mediaUrl}`;
+    const link = document.createElement('a');
+    link.href = fullUrl;
+    const ext = messageType === 'image' ? 'jpg' : messageType === 'video' ? 'mp4' : 'file';
+    link.download = `download_${Date.now()}.${ext}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // ---- Call functions ----
   const startCall = (callType) => {
@@ -302,6 +354,14 @@ export default function ChatWindow() {
     return <Check size={16} className="text-gray-400" />;
   };
 
+  // Format duration (seconds -> mm:ss)
+  const formatDuration = (seconds) => {
+    if (!seconds) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   return (
     <div className="flex h-screen bg-[#111b21]">
       <div className="hidden md:block">
@@ -309,8 +369,8 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-screen bg-whatsapp-chatbg w-full">
-        {/* Header */}
-        <div className="bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
+        {/* ===== STICKY HEADER ===== */}
+        <div className="sticky top-0 z-30 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
@@ -337,7 +397,7 @@ export default function ChatWindow() {
           </div>
         </div>
 
-        {/* Reply Preview */}
+        {/* ===== REPLY PREVIEW ===== */}
         {replyTo && (
           <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54] flex-shrink-0">
             <div className="flex-1">
@@ -354,11 +414,8 @@ export default function ChatWindow() {
           </div>
         )}
 
-        {/* Messages */}
-        <div 
-          ref={messagesContainerRef}
-          className="flex-1 overflow-y-auto px-3 md:px-10 py-4 space-y-2"
-        >
+        {/* ===== MESSAGES (SCROLLABLE) ===== */}
+        <div className="flex-1 overflow-y-auto px-3 md:px-10 py-4 space-y-2">
           {messages.length === 0 && (
             <p className="text-gray-400 text-center mt-10 text-sm">No messages yet. Say hello! 👋</p>
           )}
@@ -391,18 +448,86 @@ export default function ChatWindow() {
                   {isForwarded && (
                     <p className="text-[10px] text-gray-400 italic mb-1">Forwarded</p>
                   )}
+
+                  {/* ===== MESSAGE BUBBLE ===== */}
                   <div
                     className={`rounded-lg px-3 py-2 text-sm shadow ${
                       isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
                     }`}
                   >
-                    {/* Image, video, file rendering same as before, plus audio */}
-                    {m.messageType === 'audio' && m.mediaUrl && (
-                      <audio controls className="w-full max-w-[200px]">
-                        <source src={`${SOCKET_URL}${m.mediaUrl}`} type="audio/webm" />
-                        Your browser does not support the audio element.
-                      </audio>
+                    {/* Image, Video, File */}
+                    {m.messageType === 'image' && m.mediaUrl && (
+                      <div className="relative group/image">
+                        <img
+                          src={`${SOCKET_URL}${m.mediaUrl}`}
+                          alt="shared"
+                          className="rounded-md mb-1 max-h-64 object-cover"
+                        />
+                        <button
+                          onClick={() => downloadMedia(m.mediaUrl, 'image')}
+                          className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full hover:bg-black/70 opacity-0 group-hover/image:opacity-100 transition-opacity"
+                          title="Download Image"
+                        >
+                          <Download size={16} className="text-white" />
+                        </button>
+                      </div>
                     )}
+                    {m.messageType === 'video' && m.mediaUrl && (
+                      <div className="relative group/video">
+                        <video src={`${SOCKET_URL}${m.mediaUrl}`} controls className="rounded-md mb-1 max-h-64" />
+                        <button
+                          onClick={() => downloadMedia(m.mediaUrl, 'video')}
+                          className="absolute top-2 right-2 bg-black/50 p-1.5 rounded-full hover:bg-black/70 opacity-0 group-hover/video:opacity-100 transition-opacity"
+                          title="Download Video"
+                        >
+                          <Download size={16} className="text-white" />
+                        </button>
+                      </div>
+                    )}
+                    {m.messageType === 'file' && m.mediaUrl && (
+                      <a
+                        href={`${SOCKET_URL}${m.mediaUrl}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline block mb-1"
+                      >
+                        📄 Download file
+                      </a>
+                    )}
+
+                    {/* ===== VOICE MESSAGE (WhatsApp Style) ===== */}
+                    {m.messageType === 'audio' && m.mediaUrl && (
+                      <div className="flex items-center gap-3 min-w-[160px]">
+                        <button
+                          onClick={() => toggleAudioPlay(m._id, `${SOCKET_URL}${m.mediaUrl}`)}
+                          className="text-white hover:opacity-80"
+                        >
+                          {audioPlaying === m._id ? <Pause size={18} /> : <Play size={18} />}
+                        </button>
+                        <div className="flex-1 h-1 bg-gray-500 rounded-full">
+                          <div
+                            className="h-1 bg-whatsapp-green rounded-full transition-all duration-300"
+                            style={{ width: '0%' }}
+                            id={`progress-${m._id}`}
+                          />
+                        </div>
+                        <span className="text-xs text-gray-300 whitespace-nowrap">
+                          {formatDuration(m.duration || 0)}
+                        </span>
+                        <audio
+                          ref={(el) => { audioRefs.current[m._id] = el; }}
+                          src={`${SOCKET_URL}${m.mediaUrl}`}
+                          onTimeUpdate={(e) => {
+                            const progress = e.target.currentTime / e.target.duration * 100;
+                            const bar = document.getElementById(`progress-${m._id}`);
+                            if (bar) bar.style.width = `${progress}%`;
+                          }}
+                          onEnded={() => setAudioPlaying(null)}
+                          className="hidden"
+                        />
+                      </div>
+                    )}
+
                     {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-300">
@@ -411,7 +536,8 @@ export default function ChatWindow() {
                       {isSent && renderTicks(m.status)}
                     </div>
                   </div>
-                  {/* Menu button */}
+
+                  {/* ===== MESSAGE MENU ===== */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
                     className="absolute -top-2 -right-2 p-1 bg-[#202c33] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -420,24 +546,24 @@ export default function ChatWindow() {
                   </button>
                   {showMessageMenu === m._id && (
                     <div className="absolute -top-8 right-6 bg-[#202c33] rounded-lg shadow-lg p-1 z-10 flex gap-1 border border-[#3b4a54]">
-                      <button onClick={() => { handleReply(m); setShowMessageMenu(null); }} className="p-1.5 hover:bg-[#2a3942] rounded">
+                      <button onClick={() => handleReply(m)} className="p-1.5 hover:bg-[#2a3942] rounded">
                         <Reply size={14} className="text-gray-300" />
                       </button>
-                      <button onClick={() => { handleForward(m); setShowMessageMenu(null); }} className="p-1.5 hover:bg-[#2a3942] rounded">
+                      <button onClick={() => handleForward(m)} className="p-1.5 hover:bg-[#2a3942] rounded">
                         <Forward size={14} className="text-gray-300" />
                       </button>
                       {isSent && (
                         <>
-                          <button onClick={() => { handleDelete(m, 'me'); setShowMessageMenu(null); }} className="p-1.5 hover:bg-[#2a3942] rounded">
+                          <button onClick={() => handleDelete(m, 'me')} className="p-1.5 hover:bg-[#2a3942] rounded">
                             <Trash2 size={14} className="text-gray-300" />
                           </button>
-                          <button onClick={() => { handleDelete(m, 'everyone'); setShowMessageMenu(null); }} className="p-1.5 hover:bg-red-500/20 rounded">
+                          <button onClick={() => handleDelete(m, 'everyone')} className="p-1.5 hover:bg-red-500/20 rounded">
                             <Trash2 size={14} className="text-red-400" />
                           </button>
                         </>
                       )}
                       {!isSent && (
-                        <button onClick={() => { handleDelete(m, 'me'); setShowMessageMenu(null); }} className="p-1.5 hover:bg-[#2a3942] rounded">
+                        <button onClick={() => handleDelete(m, 'me')} className="p-1.5 hover:bg-[#2a3942] rounded">
                           <Trash2 size={14} className="text-gray-300" />
                         </button>
                       )}
@@ -450,9 +576,9 @@ export default function ChatWindow() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input area */}
+        {/* ===== INPUT AREA (Sticky at bottom) ===== */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
-          {/* File attachment */}
+          {/* Attachment */}
           <input
             type="file"
             ref={fileInputRef}
@@ -469,7 +595,7 @@ export default function ChatWindow() {
             <Paperclip size={20} />
           </button>
 
-          {/* Voice recording UI */}
+          {/* Voice Recording UI */}
           {!isRecording && !audioURL && (
             <button
               type="button"
@@ -496,10 +622,10 @@ export default function ChatWindow() {
 
           {audioURL && !isRecording && (
             <div className="flex items-center gap-2 bg-[#2a3942] rounded-full px-3 py-1 flex-1">
-              <button onClick={playAudio} className="text-white p-1">
-                {isPlaying ? <Pause size={18} /> : <Play size={18} />}
+              <button onClick={() => { const audio = document.getElementById('voice-preview'); if (audio.paused) audio.play(); else audio.pause(); }} className="text-white p-1">
+                <Play size={18} />
               </button>
-              <audio id="voice-preview" src={audioURL} onEnded={() => setIsPlaying(false)} className="hidden" />
+              <audio id="voice-preview" src={audioURL} className="hidden" />
               <span className="text-white text-sm">Voice message</span>
               <button onClick={cancelRecording} className="text-red-400 hover:text-red-300 p-1">
                 <X size={18} />
@@ -510,7 +636,7 @@ export default function ChatWindow() {
             </div>
           )}
 
-          {/* Text input */}
+          {/* Text Input */}
           {!isRecording && !audioURL && (
             <input
               id="messageInput"
@@ -521,7 +647,7 @@ export default function ChatWindow() {
             />
           )}
 
-          {/* Send button (only when text not empty) */}
+          {/* Send Button */}
           {!isRecording && !audioURL && text.trim() && (
             <button
               type="submit"
@@ -534,7 +660,7 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* Forward Modal (same as before) */}
+      {/* ===== FORWARD MODAL ===== */}
       {showForwardModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
           <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[80vh]">
@@ -566,7 +692,6 @@ export default function ChatWindow() {
             </div>
             <button
               onClick={() => {
-                // forward logic
                 if (!forwardMessage || selectedUsers.length === 0) return;
                 selectedUsers.forEach((userId) => {
                   socket.emit('send_message', {
