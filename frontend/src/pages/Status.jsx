@@ -42,12 +42,23 @@ export default function Status() {
     return () => clearInterval(interval);
   }, []);
 
-  // ---- Mark as viewed ----
+  // ---- Helper: check if status belongs to current user ----
+  const isMyStatus = (status) => {
+    const uid = status.userId?._id || status.userId;
+    return uid === user.id;
+  };
+
+  // ---- View status ----
   async function viewStatus(status) {
     setViewing(status);
+    // If it's my own status, don't mark as viewed (no API call)
+    if (isMyStatus(status)) {
+      return;
+    }
     if (!status.isViewed) {
       try {
         await api.post(`/status/view/${status._id}`);
+        // Update local state to mark as viewed
         setStatuses(prev =>
           prev.map(group => ({
             ...group,
@@ -164,11 +175,6 @@ export default function Status() {
     const reader = new FileReader();
     reader.onload = () => setStatusPreview(reader.result);
     reader.readAsDataURL(file);
-  };
-
-  const isMyStatus = (status) => {
-    const uid = status.userId?._id || status.userId;
-    return uid === user.id;
   };
 
   return (
