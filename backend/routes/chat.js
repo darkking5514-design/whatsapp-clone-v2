@@ -6,32 +6,37 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// ============================================
-// GET CHAT PARTNERS (users with messages + friends)
-// ============================================
+// GET chat partners (users with messages or friends)
 router.get('/partners', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
 
-    // 1. Get all user IDs from messages (sent or received)
-    const messageUsers = await Message.distinct('sender', {
+    // 1. Users from messages (sent or received)
+    const senderIds = await Message.distinct('sender', {
       $or: [{ sender: userId }, { receiver: userId }]
     });
-    const messageReceivers = await Message.distinct('receiver', {
+    const receiverIds = await Message.distinct('receiver', {
       $or: [{ sender: userId }, { receiver: userId }]
     });
-    const allMessageUserIds = [...new Set([...messageUsers, ...messageReceivers])].filter(id => id.toString() !== userId);
+    const messageUserIds = [...new Set([...senderIds, ...receiverIds])]
+      .filter(id => id.toString() !== userId);
 
-    // 2. Get all accepted friends (both directions)
-    const friends = await Friend.find({
-      $or: [{ userId, status: 'accepted' }, { friendId: userId, status: 'accepted' }]
-    });
-    const friendIds = friends.map(f =>
-      f.userId.toString() === userId ? f.friendId.toString() : f.userId.toString()
-    );
+    // 2. Accepted friends (if Friend model exists)
+    let friendIds = [];
+    try {
+      const friends = await Friend.find({
+        $or: [{ userId, status: 'accepted' }, { friendId: userId, status: 'accepted' }]
+      });
+      friendIds = friends.map(f =>
+        f.userId.toString() === userId ? f.friendId.toString() : f.userId.toString()
+      );
+    } catch (err) {
+      // If Friend model doesn't exist, ignore
+      console.log('Friend model not found, skipping friends in chat partners');
+    }
 
-    // 3. Combine unique user IDs
-    const allUserIds = [...new Set([...allMessageUserIds, ...friendIds])];
+    // 3. Combine unique IDs
+    const allUserIds = [...new Set([...messageUserIds, ...friendIds])];
 
     // 4. Fetch user details
     const users = await User.find({ _id: { $in: allUserIds } })
