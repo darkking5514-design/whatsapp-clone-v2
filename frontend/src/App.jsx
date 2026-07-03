@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import Login from './pages/Login';
 import ChatList from './pages/ChatList';
 import ChatWindow from './pages/ChatWindow';
+import GroupChat from './pages/GroupChat';
 import Status from './pages/Status';
 import Calls from './pages/Calls';
 import Call from './pages/Call';
@@ -34,6 +35,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <ChatWindow />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/group/:groupId"
+          element={
+            <ProtectedRoute>
+              <GroupChat />
             </ProtectedRoute>
           }
         />
@@ -74,7 +83,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/chats" replace />} />
       </Routes>
 
-      {/* Mobile Bottom Navigation - Only when logged in */}
       {user && <MobileNav />}
     </>
   );

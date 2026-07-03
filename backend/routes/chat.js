@@ -1,44 +1,87 @@
 const express = require('express');
 const Message = require('../models/Message');
 const User = require('../models/User');
-const Friend = require('../models/Friend');
+const Group = require('../models/Group');
 const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET chat partners – users with whom you exchanged messages OR are friends
-router.get('/partners', authMiddleware, async (req, res) => {
+// ---- Get unified chat list (private + groups) ----
+router.get('/unified', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
 
-    // 1. Users from messages
+    // 1. Private chat partners
     const senderIds = await Message.distinct('sender', {
-      $or: [{ sender: userId }, { receiver: userId }]
+      $or: [{ sender: userId }, { receiver: userId }],
+      groupId: null,
     });
     const receiverIds = await Message.distinct('receiver', {
-      $or: [{ sender: userId }, { receiver: userId }]
+      $or: [{ sender: userId }, { receiver: userId }],
+      groupId: null,
     });
-    const messageUserIds = [...new Set([...senderIds, ...receiverIds])]
-      .filter(id => id.toString() !== userId);
-
-    // 2. Accepted friends
-    const friends = await Friend.find({
-      $or: [{ userId, status: 'accepted' }, { friendId: userId, status: 'accepted' }]
-    });
-    const friendIds = friends.map(f =>
-      f.userId.toString() === userId ? f.friendId.toString() : f.userId.toString()
+    const privateUserIds = [...new Set([...senderIds, ...receiverIds])].filter(
+      (id) => id.toString() !== userId
     );
+    const privateUsers = await User.find({ _id: { $in: privateUserIds } })
+      .select('name phoneNumber profilePic onlineStatus');
 
-    // 3. Combine unique IDs
-    const allUserIds = [...new Set([...messageUserIds, ...friendIds])];
+    // 2. Groups the user is in
+    const groups = await Group.find({
+      'members.user': userId,
+      isActive: true,
+    }).populate('members.user', 'name phoneNumber');
 
-    // 4. Fetch user details
-    const users = await User.find({ _id: { $in: allUserIds } })
-      .select('name username phoneNumber profilePic onlineStatus lastSeen');
+    // 3. Build unified list
+    const unified = [];
 
-    res.json(users);
+    for (const user of privateUsers) {
+      const lastMsg = await Message.findOne({
+        $or: [
+          { sender: userId, receiver: user._id },
+          { sender: user._id, receiver: userId },
+        ],
+        groupId: null,
+      }).sort({ timestamp: -1 });
+      unified.push({
+        type: 'private',
+        id: user._id,
+        name: user.name || user.phoneNumber,
+        profilePic: user.profilePic,
+        onlineStatus: user.onlineStatus,
+        lastMessage: lastMsg,
+        unreadCount: await Message.countDocuments({
+          sender: user._id,
+          receiver: userId,
+          status: { $ne: 'read' },
+          groupId: null,
+        }),
+      });
+    }
+
+    for (const group of groups) {
+      const lastMsg = await Message.findOne({ groupId: group._id }).sort({ timestamp: -1 });
+      unified.push({
+        type: 'group',
+        id: group._id,
+        name: group.name,
+        profilePic: group.profilePic,
+        members: group.members,
+        lastMessage: lastMsg,
+        unreadCount: 0, // can be extended later
+      });
+    }
+
+    // Sort by latest message
+    unified.sort((a, b) => {
+      const tA = a.lastMessage ? new Date(a.lastMessage.timestamp) : 0;
+      const tB = b.lastMessage ? new Date(b.lastMessage.timestamp) : 0;
+      return tB - tA;
+    });
+
+    res.json(unified);
   } catch (err) {
-    console.error('❌ Chat partners error:', err.message);
+    console.error('Unified chat error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });

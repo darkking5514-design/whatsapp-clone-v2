@@ -10,7 +10,12 @@ const messageSchema = new mongoose.Schema(
     receiver: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
-      required: true,
+      default: null,
+    },
+    groupId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Group',
+      default: null,
     },
     content: {
       type: String,
@@ -56,9 +61,8 @@ const messageSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    // ---- Status Reply (fixed) ----
     statusReply: {
-      type: mongoose.Schema.Types.Mixed, // 👈 Use Mixed to allow null
+      type: mongoose.Schema.Types.Mixed,
       default: null,
     },
     timestamp: {
@@ -69,6 +73,6 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-messageSchema.index({ sender: 1, receiver: 1, timestamp: 1 });
+messageSchema.index({ sender: 1, receiver: 1, groupId: 1, timestamp: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);

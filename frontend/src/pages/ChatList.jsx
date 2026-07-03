@@ -1,229 +1,146 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Users } from 'lucide-react';
 import api from '../api/axios';
 import { useSocket } from '../context/SocketContext';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import CreateGroupModal from '../components/CreateGroupModal';
 
 export default function ChatList() {
-  const [users, setUsers] = useState([]);
+  const [items, setItems] = useState([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
-  const [lastMessages, setLastMessages] = useState({});
-  const [unreadCounts, setUnreadCounts] = useState({});
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const { onlineUsers, socket, connected } = useSocket();
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // ---- Fetch chat partners (only those with messages or friends) ----
-  const fetchChatPartners = async () => {
+  const fetchUnified = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await api.get('/chat/partners');
-      const usersList = res.data || [];
-      setUsers(usersList);
-
-      // Fetch last message and unread count for each partner
-      const messages = {};
-      const unread = {};
-      for (const u of usersList) {
-        try {
-          const msgRes = await api.get(`/messages/${user.id}/${u._id}`);
-          const msgs = msgRes.data || [];
-          if (msgs.length > 0) {
-            messages[u._id] = msgs[msgs.length - 1];
-          }
-          const unreadMsgs = msgs.filter(m =>
-            m.sender === u._id && m.status !== 'read'
-          );
-          if (unreadMsgs.length > 0) {
-            unread[u._id] = unreadMsgs.length;
-          }
-        } catch (err) {
-          console.error(`Error fetching messages for ${u._id}:`, err);
-        }
-      }
-      setLastMessages(messages);
-      setUnreadCounts(unread);
+      const res = await api.get('/chat/unified');
+      setItems(res.data);
     } catch (err) {
-      console.error('Failed to fetch chat partners:', err);
+      console.error('Failed to fetch unified chat:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchChatPartners();
+    fetchUnified();
   }, [user]);
 
-  // ---- Real‑time updates: refetch when a new message arrives ----
   useEffect(() => {
     if (!socket || !connected) return;
-
-    const onReceiveMessage = () => {
-      // Refetch after a short delay to avoid rapid calls
-      setTimeout(fetchChatPartners, 500);
-    };
-
-    // Also listen for deletion/read events to update list
-    const onMessageDeleted = () => {
-      setTimeout(fetchChatPartners, 500);
-    };
-    const onMessagesRead = () => {
-      setTimeout(fetchChatPartners, 500);
-    };
-
-    socket.on('receive_message', onReceiveMessage);
-    socket.on('message_deleted', onMessageDeleted);
-    socket.on('messages_read', onMessagesRead);
-
+    const onNewMessage = () => setTimeout(fetchUnified, 500);
+    socket.on('receive_message', onNewMessage);
+    socket.on('receive_group_message', onNewMessage);
     return () => {
-      socket.off('receive_message', onReceiveMessage);
-      socket.off('message_deleted', onMessageDeleted);
-      socket.off('messages_read', onMessagesRead);
+      socket.off('receive_message', onNewMessage);
+      socket.off('receive_group_message', onNewMessage);
     };
   }, [socket, connected]);
 
-  // ---- Clear unread when chat is opened ----
-  const openChat = (userId) => {
-    setUnreadCounts((prev) => ({
-      ...prev,
-      [userId]: 0,
-    }));
-    navigate(`/chat/${userId}`);
+  const openChat = (item) => {
+    if (item.type === 'private') {
+      navigate(`/chat/${item.id}`);
+    } else {
+      navigate(`/group/${item.id}`);
+    }
   };
 
-  // ---- Sorting by latest message ----
-  const sortedUsers = [...users].sort((a, b) => {
-    const msgA = lastMessages[a._id];
-    const msgB = lastMessages[b._id];
-    if (!msgA && !msgB) return 0;
-    if (!msgA) return 1;
-    if (!msgB) return -1;
-    return new Date(msgB.timestamp) - new Date(msgA.timestamp);
-  });
+  const filtered = items.filter((item) =>
+    item.name.toLowerCase().includes(search.toLowerCase())
+  );
 
-  // ---- Search filter (by name or phone) ----
-  const filtered = sortedUsers.filter((u) => {
-    const name = (u.name || u.username || '').toLowerCase();
-    const phone = u.phoneNumber || '';
-    const query = search.toLowerCase().trim();
-    return name.includes(query) || phone.includes(query);
-  });
-
-  // ---- Format unread count ----
-  const formatUnreadCount = (count) => {
-    if (!count || count === 0) return null;
-    if (count > 99) return '99+';
-    return count;
+  const getLastMsgPreview = (item) => {
+    const msg = item.lastMessage;
+    if (!msg) return 'No messages yet';
+    if (msg.messageType === 'image') return '📷 Photo';
+    if (msg.messageType === 'video') return '🎥 Video';
+    if (msg.messageType === 'audio') return '🎵 Voice message';
+    if (msg.messageType === 'file') return '📄 File';
+    return msg.content || 'Media';
   };
 
   return (
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
-      <div className="flex-1 flex flex-col pb-0 md:pb-0">
-        {/* Header */}
-        <div className="bg-[#202c33] px-4 py-3">
+      <div className="flex-1 flex flex-col">
+        <div className="bg-[#202c33] px-4 py-3 flex justify-between items-center">
           <h1 className="text-white text-lg font-semibold">Chats</h1>
+          <button
+            onClick={() => setShowCreateGroup(true)}
+            className="bg-whatsapp-green text-black p-2 rounded-full hover:opacity-90 transition-opacity"
+            title="New Group"
+          >
+            <Users size={20} />
+          </button>
         </div>
 
-        {/* Search Bar */}
         <div className="px-3 py-2 bg-[#111b21]">
           <div className="flex items-center gap-2 bg-[#202c33] rounded-lg px-3 py-2">
             <Search size={16} className="text-gray-400" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search by name or phone number..."
+              placeholder="Search chats..."
               className="bg-transparent outline-none text-sm text-white w-full placeholder-gray-500"
             />
           </div>
         </div>
 
-        {/* Chat List */}
         <div className="flex-1 overflow-y-auto">
-          {loading && (
-            <p className="text-gray-400 text-center mt-6">Loading...</p>
-          )}
-
-          {!loading && users.length === 0 && (
+          {loading && <p className="text-gray-400 text-center mt-6">Loading...</p>}
+          {!loading && items.length === 0 && (
             <p className="text-gray-400 text-center mt-6">
-              No conversations yet. Start a chat from the Friends tab!
+              No chats yet. Start a new chat or group!
             </p>
           )}
-
-          {!loading && users.length > 0 && filtered.length === 0 && (
-            <p className="text-gray-400 text-center mt-6">
-              No user found matching "{search}"
-            </p>
-          )}
-
-          {filtered.map((u) => {
-            const isOnline = !!onlineUsers[u._id];
-            const lastMsg = lastMessages[u._id];
-            const unread = unreadCounts[u._id] || 0;
-
-            let lastMsgPreview = 'No messages yet';
-            if (lastMsg) {
-              if (lastMsg.messageType === 'image') lastMsgPreview = '📷 Photo';
-              else if (lastMsg.messageType === 'video') lastMsgPreview = '🎥 Video';
-              else if (lastMsg.messageType === 'audio') lastMsgPreview = '🎵 Voice message';
-              else if (lastMsg.messageType === 'file') lastMsgPreview = '📄 File';
-              else if (lastMsg.content) {
-                lastMsgPreview = lastMsg.content.length > 35
-                  ? lastMsg.content.substring(0, 35) + '...'
-                  : lastMsg.content;
-              }
-            }
-
-            const isSentByMe = lastMsg?.sender === user?.id;
-            const msgPrefix = isSentByMe ? 'You: ' : '';
-
+          {filtered.map((item) => {
+            const isOnline = item.type === 'private' && onlineUsers[item.id];
+            const unread = item.unreadCount || 0;
             return (
               <button
-                key={u._id}
-                onClick={() => openChat(u._id)}
-                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#202c33] transition-colors text-left border-b border-black/20 relative"
+                key={item.type + item.id}
+                onClick={() => openChat(item)}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#202c33] transition-colors text-left border-b border-black/20"
               >
-                {/* Avatar */}
                 <div className="relative">
                   <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg">
-                    {(u.name || u.username || '?')[0].toUpperCase()}
+                    {item.name?.[0]?.toUpperCase() || '?'}
                   </div>
                   {isOnline && (
-                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-whatsapp-green border-2 border-[#111b21] rounded-full"></span>
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-whatsapp-green border-2 border-[#111b21] rounded-full" />
                   )}
                 </div>
-
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
-                    <p className="text-white font-medium truncate">
-                      {u.name || u.username || 'Unknown'}
-                    </p>
-                    {lastMsg && (
+                    <p className="text-white font-medium truncate">{item.name}</p>
+                    {item.lastMessage && (
                       <p className="text-xs text-gray-400 whitespace-nowrap ml-2">
-                        {new Date(lastMsg.timestamp).toLocaleTimeString([], {
+                        {new Date(item.lastMessage.timestamp).toLocaleTimeString([], {
                           hour: '2-digit',
                           minute: '2-digit',
                         })}
                       </p>
                     )}
                   </div>
+                  <p className="text-xs text-gray-400 truncate">{getLastMsgPreview(item)}</p>
                   <p className="text-xs text-gray-400 truncate">
-                    {msgPrefix}{lastMsgPreview}
-                  </p>
-                  <p className="text-xs text-gray-400 truncate">
-                    {isOnline ? '🟢 Online' : '⚪ Offline'}
+                    {item.type === 'group'
+                      ? `👥 ${item.members?.length || 0} members`
+                      : isOnline
+                      ? '🟢 Online'
+                      : '⚪ Offline'}
                   </p>
                 </div>
-
-                {/* Unread Badge */}
                 {unread > 0 && (
                   <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5">
-                    {formatUnreadCount(unread)}
+                    {unread > 99 ? '99+' : unread}
                   </div>
                 )}
               </button>
@@ -231,6 +148,13 @@ export default function ChatList() {
           })}
         </div>
       </div>
+
+      {showCreateGroup && (
+        <CreateGroupModal
+          onClose={() => setShowCreateGroup(false)}
+          onGroupCreated={fetchUnified}
+        />
+      )}
     </div>
   );
 }
