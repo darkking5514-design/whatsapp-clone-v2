@@ -154,3 +154,15 @@ body {
     padding-top: max(10px, env(safe-area-inset-top, 10px));
   }
 }
+
+/* Safe area for bottom navigation */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+}
+
+/* Mobile: ensure chat list has enough bottom space */
+@media (max-width: 768px) {
+  .chat-list-container {
+    padding-bottom: 70px;
+  }
+}
