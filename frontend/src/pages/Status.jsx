@@ -51,14 +51,12 @@ export default function Status() {
   // ---- View status ----
   async function viewStatus(status) {
     setViewing(status);
-    // If it's my own status, don't mark as viewed (no API call)
     if (isMyStatus(status)) {
       return;
     }
     if (!status.isViewed) {
       try {
         await api.post(`/status/view/${status._id}`);
-        // Update local state to mark as viewed
         setStatuses(prev =>
           prev.map(group => ({
             ...group,
@@ -241,13 +239,7 @@ export default function Status() {
                           <video src={`${SOCKET_URL}${s.mediaUrl}`} className="w-full h-full object-cover" />
                         ) : null}
                       </div>
-                      {/* View count badge – shown to everyone */}
-                      {s.viewedBy.length > 0 && (
-                        <span className="absolute -bottom-1 -right-1 bg-whatsapp-green text-black text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-[#111b21]">
-                          {s.viewedBy.length}
-                        </span>
-                      )}
-                      {/* Delete button only for owner */}
+                      {/* ❌ Removed view count badge from here */}
                       {isMyStatus(s) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteStatus(s._id); }}
@@ -276,7 +268,6 @@ export default function Status() {
           </button>
 
           <div className="max-w-lg w-full px-4 relative">
-            {/* User Info */}
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
                 {viewing.userId?.name?.[0]?.toUpperCase() || '?'}
@@ -290,7 +281,6 @@ export default function Status() {
               </div>
             </div>
 
-            {/* Status Content */}
             <div
               className="rounded-lg min-h-[300px] flex items-center justify-center p-4 relative"
               style={{ backgroundColor: viewing.backgroundColor || '#075E54' }}
@@ -329,14 +319,13 @@ export default function Status() {
               )}
             </div>
 
-            {/* View count – shown to everyone */}
+            {/* View count – shown only when viewing status */}
             {viewing.viewedBy && viewing.viewedBy.length > 0 && (
               <div className="text-center text-gray-400 text-sm mt-3">
                 Viewed by {viewing.viewedBy.length} people
               </div>
             )}
 
-            {/* Actions */}
             <div className="flex justify-center gap-4 mt-2">
               {viewing.mediaUrl && (
                 <button
@@ -416,7 +405,6 @@ export default function Status() {
               </button>
             </div>
 
-            {/* Status Type Selector */}
             <div className="flex gap-2 mb-3">
               <button
                 onClick={() => setStatusType('text')}
@@ -461,7 +449,6 @@ export default function Status() {
               onChange={handleFileSelect}
             />
 
-            {/* Color Selector */}
             <div className="flex gap-1 mb-3 flex-wrap">
               {colors.map((c) => (
                 <button
@@ -475,7 +462,6 @@ export default function Status() {
               ))}
             </div>
 
-            {/* Preview Area */}
             {statusType === 'text' && (
               <div
                 className="rounded-lg p-4 mb-3 min-h-[150px] flex items-center justify-center"
