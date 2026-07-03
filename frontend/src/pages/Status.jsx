@@ -241,6 +241,13 @@ export default function Status() {
                           <video src={`${SOCKET_URL}${s.mediaUrl}`} className="w-full h-full object-cover" />
                         ) : null}
                       </div>
+                      {/* View count badge – shown to everyone */}
+                      {s.viewedBy.length > 0 && (
+                        <span className="absolute -bottom-1 -right-1 bg-whatsapp-green text-black text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1 border-2 border-[#111b21]">
+                          {s.viewedBy.length}
+                        </span>
+                      )}
+                      {/* Delete button only for owner */}
                       {isMyStatus(s) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteStatus(s._id); }}
@@ -322,8 +329,15 @@ export default function Status() {
               )}
             </div>
 
+            {/* View count – shown to everyone */}
+            {viewing.viewedBy && viewing.viewedBy.length > 0 && (
+              <div className="text-center text-gray-400 text-sm mt-3">
+                Viewed by {viewing.viewedBy.length} people
+              </div>
+            )}
+
             {/* Actions */}
-            <div className="flex justify-center gap-4 mt-4">
+            <div className="flex justify-center gap-4 mt-2">
               {viewing.mediaUrl && (
                 <button
                   onClick={() => downloadStatus(viewing.mediaUrl, viewing.type)}
