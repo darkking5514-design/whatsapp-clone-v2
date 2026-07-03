@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Mic, MicOff, Phone, Video, VideoOff, Play, Volume2, VolumeX } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
+import api from '../api/axios';
 
 const ICE_SERVERS = {
   iceServers: [
@@ -60,6 +61,7 @@ export default function Call() {
   const pendingCandidatesRef = useRef([]);
   const endedRef = useRef(false);
   const timerIntervalRef = useRef(null);
+  const callStartTimeRef = useRef(null);
 
   // ---- Format time ----
   const formatTime = (seconds) => {
@@ -112,6 +114,21 @@ export default function Call() {
     }
   }, [remoteStreamReady]);
 
+  // ---- Log call to backend ----
+  const logCall = async (duration, status) => {
+    try {
+      await api.post('/calls/log', {
+        receiverId: otherUserId,
+        type: callType,
+        duration: duration || 0,
+        status: status || 'missed',
+      });
+      console.log('📞 Call logged:', { duration, status });
+    } catch (err) {
+      console.error('Failed to log call:', err);
+    }
+  };
+
   // ---- Main setup ----
   useEffect(() => {
     let cancelled = false;
@@ -142,6 +159,7 @@ export default function Call() {
           setRemoteConnected(true);
           setCallStatus('Connected');
           if (!timerActive) {
+            callStartTimeRef.current = Date.now();
             setTimerActive(true);
             timerIntervalRef.current = setInterval(() => {
               setCallDuration(prev => prev + 1);
@@ -285,7 +303,21 @@ export default function Call() {
   const endCall = (notify = true) => {
     if (endedRef.current) return;
     endedRef.current = true;
-    if (notify) socket?.emit('call_end', { to: otherUserId, from: user.id });
+    if (notify) {
+      socket?.emit('call_end', { to: otherUserId, from: user.id });
+    }
+    // Determine status for logging
+    let status = 'missed';
+    if (remoteConnected) {
+      status = 'answered';
+    } else if (notify && !remoteConnected) {
+      status = 'cancelled';
+    } else if (!notify && !remoteConnected) {
+      status = 'rejected';
+    }
+    // Log the call (duration is total seconds)
+    const duration = callDuration;
+    logCall(duration, status);
     cleanup();
     setTimeout(() => navigate(-1), 500);
   };
@@ -310,9 +342,8 @@ export default function Call() {
 
   return (
     <div className="flex flex-col h-dvh bg-black">
-      {/* Main video area - takes all available space */}
+      {/* Main video area */}
       <div className="flex-1 relative bg-[#0b141a] overflow-hidden">
-        {/* Remote video */}
         <video
           ref={remoteVideoRef}
           autoPlay
@@ -369,7 +400,7 @@ export default function Call() {
         )}
       </div>
 
-      {/* Controls – always at bottom with safe area */}
+      {/* Controls */}
       <div className="bg-[#111b21] py-4 flex items-center justify-center gap-6 flex-shrink-0 safe-bottom">
         <button
           onClick={toggleMute}
@@ -402,7 +433,6 @@ export default function Call() {
         </button>
       </div>
 
-      {/* Hidden audio element */}
       <audio ref={remoteAudioRef} autoPlay playsInline style={{ display: 'none' }} />
     </div>
   );

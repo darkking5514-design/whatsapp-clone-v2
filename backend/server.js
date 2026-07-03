@@ -34,6 +34,7 @@ const messageRoutes = require('./routes/messages');
 const statusRoutes = require('./routes/status');
 const chatRoutes = require('./routes/chat');
 const friendRoutes = require('./routes/friends');
+const callRoutes = require('./routes/calls'); // 👈 New call routes
 const { initSocket } = require('./socket/index');
 
 // ============================================
@@ -85,8 +86,9 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/status', statusRoutes);
-app.use('/api/chat', chatRoutes);      // Chat partners (friends + message history)
-app.use('/api/friends', friendRoutes); // Friend management (search, request, accept, reject)
+app.use('/api/chat', chatRoutes);
+app.use('/api/friends', friendRoutes);
+app.use('/api/calls', callRoutes); // 👈 Register call routes
 
 // Health check
 app.get('/api/health', (req, res) => {
