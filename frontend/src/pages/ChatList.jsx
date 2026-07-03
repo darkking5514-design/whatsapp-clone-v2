@@ -16,6 +16,7 @@ export default function ChatList() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
+  // ---- Fetch unified chat list (private + groups) ----
   const fetchUnified = async () => {
     if (!user) return;
     setLoading(true);
@@ -24,6 +25,23 @@ export default function ChatList() {
       setItems(res.data);
     } catch (err) {
       console.error('Failed to fetch unified chat:', err);
+      // Fallback: try old /partners endpoint if /unified fails (backward compatibility)
+      try {
+        const fallbackRes = await api.get('/chat/partners');
+        // Convert old format to new unified format
+        const converted = fallbackRes.data.map((u) => ({
+          type: 'private',
+          id: u._id,
+          name: u.name || u.phoneNumber,
+          profilePic: u.profilePic,
+          onlineStatus: u.onlineStatus,
+          lastMessage: null,
+          unreadCount: 0,
+        }));
+        setItems(converted);
+      } catch (fallbackErr) {
+        console.error('Fallback also failed:', fallbackErr);
+      }
     } finally {
       setLoading(false);
     }
@@ -33,6 +51,7 @@ export default function ChatList() {
     fetchUnified();
   }, [user]);
 
+  // ---- Real-time updates ----
   useEffect(() => {
     if (!socket || !connected) return;
     const onNewMessage = () => setTimeout(fetchUnified, 500);
@@ -44,6 +63,7 @@ export default function ChatList() {
     };
   }, [socket, connected]);
 
+  // ---- Navigation ----
   const openChat = (item) => {
     if (item.type === 'private') {
       navigate(`/chat/${item.id}`);
@@ -52,10 +72,12 @@ export default function ChatList() {
     }
   };
 
+  // ---- Filter by search ----
   const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
 
+  // ---- Last message preview ----
   const getLastMsgPreview = (item) => {
     const msg = item.lastMessage;
     if (!msg) return 'No messages yet';
@@ -70,6 +92,7 @@ export default function ChatList() {
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
       <div className="flex-1 flex flex-col">
+        {/* Header with New Group button */}
         <div className="bg-[#202c33] px-4 py-3 flex justify-between items-center">
           <h1 className="text-white text-lg font-semibold">Chats</h1>
           <button
@@ -81,6 +104,7 @@ export default function ChatList() {
           </button>
         </div>
 
+        {/* Search bar */}
         <div className="px-3 py-2 bg-[#111b21]">
           <div className="flex items-center gap-2 bg-[#202c33] rounded-lg px-3 py-2">
             <Search size={16} className="text-gray-400" />
@@ -93,6 +117,7 @@ export default function ChatList() {
           </div>
         </div>
 
+        {/* Chat list */}
         <div className="flex-1 overflow-y-auto">
           {loading && <p className="text-gray-400 text-center mt-6">Loading...</p>}
           {!loading && items.length === 0 && (
@@ -109,6 +134,7 @@ export default function ChatList() {
                 onClick={() => openChat(item)}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#202c33] transition-colors text-left border-b border-black/20"
               >
+                {/* Avatar */}
                 <div className="relative">
                   <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg">
                     {item.name?.[0]?.toUpperCase() || '?'}
@@ -117,6 +143,8 @@ export default function ChatList() {
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-whatsapp-green border-2 border-[#111b21] rounded-full" />
                   )}
                 </div>
+
+                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
                     <p className="text-white font-medium truncate">{item.name}</p>
@@ -138,6 +166,8 @@ export default function ChatList() {
                       : '⚪ Offline'}
                   </p>
                 </div>
+
+                {/* Unread badge */}
                 {unread > 0 && (
                   <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5">
                     {unread > 99 ? '99+' : unread}
@@ -149,6 +179,7 @@ export default function ChatList() {
         </div>
       </div>
 
+      {/* Create Group Modal */}
       {showCreateGroup && (
         <CreateGroupModal
           onClose={() => setShowCreateGroup(false)}
