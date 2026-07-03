@@ -32,8 +32,8 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
 const statusRoutes = require('./routes/status');
-const chatRoutes = require('./routes/chat');          // NEW route for chat partners
-// const friendRoutes = require('./routes/friends');   // REMOVE this line if file doesn't exist
+const chatRoutes = require('./routes/chat');
+const friendRoutes = require('./routes/friends');
 const { initSocket } = require('./socket/index');
 
 // ============================================
@@ -85,8 +85,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/status', statusRoutes);
-// app.use('/api/friends', friendRoutes);   // REMOVE this line
-app.use('/api/chat', chatRoutes);   // NEW: for chat partners
+app.use('/api/chat', chatRoutes);      // Chat partners (friends + message history)
+app.use('/api/friends', friendRoutes); // Friend management (search, request, accept, reject)
 
 // Health check
 app.get('/api/health', (req, res) => {

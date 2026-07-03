@@ -6,12 +6,12 @@ const authMiddleware = require('../middleware/auth');
 
 const router = express.Router();
 
-// GET chat partners – users with whom you have exchanged messages OR are friends
+// GET chat partners – users with whom you exchanged messages OR are friends
 router.get('/partners', authMiddleware, async (req, res) => {
   try {
     const userId = req.userId;
 
-    // 1. Users from messages (sent or received)
+    // 1. Users from messages
     const senderIds = await Message.distinct('sender', {
       $or: [{ sender: userId }, { receiver: userId }]
     });
