@@ -1,12 +1,12 @@
 // ============================================
-// SERVER.JS - COMPLETE WhatsApp Clone Backend
+// SERVER.JS – COMPLETE BACKEND
 // ============================================
 
 // Load environment variables
 require('dotenv').config({ path: './.env' });
 
 // ============================================
-// DEBUG - Check environment variables
+// DEBUG – Check environment variables
 // ============================================
 console.log('🔍 ===== ENVIRONMENT VARIABLES CHECK =====');
 console.log('📋 MONGO_URI:', process.env.MONGO_URI ? '✅ Loaded' : '❌ NOT FOUND');
@@ -27,14 +27,17 @@ const fs = require('fs');
 const mongoose = require('mongoose');
 const { Server } = require('socket.io');
 
-// Import routes
+// ---- Routes ----
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const messageRoutes = require('./routes/messages');
 const statusRoutes = require('./routes/status');
 const chatRoutes = require('./routes/chat');
 const friendRoutes = require('./routes/friends');
-const callRoutes = require('./routes/calls'); // 👈 New call routes
+const callRoutes = require('./routes/calls');
+const groupRoutes = require('./routes/groups');      // 👈 Group routes
+
+// ---- Socket ----
 const { initSocket } = require('./socket/index');
 
 // ============================================
@@ -66,7 +69,6 @@ app.use(
     credentials: true,
   })
 );
-
 app.use(express.json());
 
 // ============================================
@@ -86,11 +88,12 @@ app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/status', statusRoutes);
-app.use('/api/chat', chatRoutes);
-app.use('/api/friends', friendRoutes);
-app.use('/api/calls', callRoutes); // 👈 Register call routes
+app.use('/api/chat', chatRoutes);           // Unified chat + partners
+app.use('/api/friends', friendRoutes);      // Friend management
+app.use('/api/calls', callRoutes);          // Call history
+app.use('/api/groups', groupRoutes);        // 👈 Group CRUD
 
-// Health check
+// ---- Health check ----
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',

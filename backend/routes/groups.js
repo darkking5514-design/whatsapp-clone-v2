@@ -1,9 +1,7 @@
 const express = require('express');
 const Group = require('../models/Group');
 const Message = require('../models/Message');
-const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
-const upload = require('../middleware/upload');
 
 const router = express.Router();
 
@@ -61,7 +59,7 @@ router.get('/:groupId', authMiddleware, async (req, res) => {
   }
 });
 
-// ---- Update group info (admin only) ----
+// ---- Update group (admin only) ----
 router.put('/:groupId', authMiddleware, async (req, res) => {
   try {
     const { name, description, profilePic } = req.body;
@@ -91,7 +89,6 @@ router.post('/:groupId/members', authMiddleware, async (req, res) => {
       'members.role': 'admin',
     });
     if (!group) return res.status(403).json({ message: 'Not authorized' });
-
     const existing = group.members.map(m => m.user.toString());
     const toAdd = userIds.filter(id => !existing.includes(id));
     for (const id of toAdd) {
@@ -113,9 +110,7 @@ router.delete('/:groupId/members/:userId', authMiddleware, async (req, res) => {
       'members.role': 'admin',
     });
     if (!group) return res.status(403).json({ message: 'Not authorized' });
-
-    const target = req.params.userId;
-    group.members = group.members.filter(m => m.user.toString() !== target);
+    group.members = group.members.filter(m => m.user.toString() !== req.params.userId);
     await group.save();
     res.json(group);
   } catch (err) {
@@ -133,7 +128,6 @@ router.put('/:groupId/members/:userId/role', authMiddleware, async (req, res) =>
       'members.role': 'admin',
     });
     if (!group) return res.status(403).json({ message: 'Not authorized' });
-
     const member = group.members.find(m => m.user.toString() === req.params.userId);
     if (!member) return res.status(404).json({ message: 'Member not found' });
     member.role = role;
@@ -154,7 +148,6 @@ router.post('/:groupId/leave', authMiddleware, async (req, res) => {
       await Group.findByIdAndDelete(req.params.groupId);
       return res.json({ message: 'Group deleted' });
     }
-    // Assign new admin if no admins left
     const remainingAdmins = group.members.filter(m => m.role === 'admin');
     if (remainingAdmins.length === 0) {
       group.members[0].role = 'admin';
