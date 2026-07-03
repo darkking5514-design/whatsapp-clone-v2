@@ -25,10 +25,9 @@ export default function ChatList() {
       setItems(res.data);
     } catch (err) {
       console.error('Failed to fetch unified chat:', err);
-      // Fallback: try old /partners endpoint if /unified fails (backward compatibility)
+      // Fallback to old endpoint if unified fails
       try {
         const fallbackRes = await api.get('/chat/partners');
-        // Convert old format to new unified format
         const converted = fallbackRes.data.map((u) => ({
           type: 'private',
           id: u._id,
@@ -72,7 +71,7 @@ export default function ChatList() {
     }
   };
 
-  // ---- Filter by search ----
+  // ---- Filter ----
   const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
@@ -136,8 +135,16 @@ export default function ChatList() {
               >
                 {/* Avatar */}
                 <div className="relative">
-                  <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg">
-                    {item.name?.[0]?.toUpperCase() || '?'}
+                  <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
+                    {item.profilePic ? (
+                      <img
+                        src={item.profilePic}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      item.name?.[0]?.toUpperCase() || '?'
+                    )}
                   </div>
                   {isOnline && (
                     <span className="absolute bottom-0 right-0 w-3 h-3 bg-whatsapp-green border-2 border-[#111b21] rounded-full" />
