@@ -16,7 +16,6 @@ export default function ChatList() {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  // ---- Fetch unified chat list (private + groups) ----
   const fetchUnified = async () => {
     if (!user) return;
     setLoading(true);
@@ -25,7 +24,6 @@ export default function ChatList() {
       setItems(res.data);
     } catch (err) {
       console.error('Failed to fetch unified chat:', err);
-      // Fallback to old endpoint if unified fails
       try {
         const fallbackRes = await api.get('/chat/partners');
         const converted = fallbackRes.data.map((u) => ({
@@ -50,7 +48,6 @@ export default function ChatList() {
     fetchUnified();
   }, [user]);
 
-  // ---- Real-time updates ----
   useEffect(() => {
     if (!socket || !connected) return;
     const onNewMessage = () => setTimeout(fetchUnified, 500);
@@ -62,7 +59,6 @@ export default function ChatList() {
     };
   }, [socket, connected]);
 
-  // ---- Navigation ----
   const openChat = (item) => {
     if (item.type === 'private') {
       navigate(`/chat/${item.id}`);
@@ -71,12 +67,10 @@ export default function ChatList() {
     }
   };
 
-  // ---- Filter ----
   const filtered = items.filter((item) =>
     item.name.toLowerCase().includes(search.toLowerCase())
   );
 
-  // ---- Last message preview ----
   const getLastMsgPreview = (item) => {
     const msg = item.lastMessage;
     if (!msg) return 'No messages yet';
@@ -91,7 +85,7 @@ export default function ChatList() {
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
       <div className="flex-1 flex flex-col">
-        {/* Header with New Group button */}
+        {/* Header */}
         <div className="bg-[#202c33] px-4 py-3 flex justify-between items-center">
           <h1 className="text-white text-lg font-semibold">Chats</h1>
           <button
@@ -116,8 +110,8 @@ export default function ChatList() {
           </div>
         </div>
 
-        {/* Chat list */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Chat list – add bottom padding for mobile nav */}
+        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
           {loading && <p className="text-gray-400 text-center mt-6">Loading...</p>}
           {!loading && items.length === 0 && (
             <p className="text-gray-400 text-center mt-6">
@@ -133,7 +127,6 @@ export default function ChatList() {
                 onClick={() => openChat(item)}
                 className="w-full flex items-center gap-3 px-4 py-3 hover:bg-[#202c33] transition-colors text-left border-b border-black/20"
               >
-                {/* Avatar */}
                 <div className="relative">
                   <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
                     {item.profilePic ? (
@@ -151,7 +144,6 @@ export default function ChatList() {
                   )}
                 </div>
 
-                {/* Info */}
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center">
                     <p className="text-white font-medium truncate">{item.name}</p>
@@ -174,7 +166,6 @@ export default function ChatList() {
                   </p>
                 </div>
 
-                {/* Unread badge */}
                 {unread > 0 && (
                   <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5">
                     {unread > 99 ? '99+' : unread}
@@ -186,7 +177,6 @@ export default function ChatList() {
         </div>
       </div>
 
-      {/* Create Group Modal */}
       {showCreateGroup && (
         <CreateGroupModal
           onClose={() => setShowCreateGroup(false)}
