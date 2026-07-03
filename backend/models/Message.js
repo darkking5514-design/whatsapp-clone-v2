@@ -30,7 +30,6 @@ const messageSchema = new mongoose.Schema(
       enum: ['sent', 'delivered', 'read'],
       default: 'sent',
     },
-    // ---- Reply, Forward, Delete ----
     replyTo: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Message',
@@ -57,15 +56,9 @@ const messageSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    // 👇 NEW: For status replies
+    // ---- Status Reply (fixed) ----
     statusReply: {
-      type: {
-        text: { type: String, default: '' },
-        mediaUrl: { type: String, default: '' },
-        type: { type: String, enum: ['text', 'image', 'video'], default: 'text' },
-        username: { type: String, default: '' },
-        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-      },
+      type: mongoose.Schema.Types.Mixed, // 👈 Use Mixed to allow null
       default: null,
     },
     timestamp: {
