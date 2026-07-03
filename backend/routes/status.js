@@ -8,13 +8,11 @@ const router = express.Router();
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
 // ============================================
-// CREATE STATUS (Text, Image, Video with Text)
+// CREATE TEXT STATUS
 // ============================================
 router.post('/create', authMiddleware, async (req, res) => {
   try {
     const { text, type, backgroundColor, textColor } = req.body;
-
-    console.log('📝 Creating status:', { text, type });
 
     if (!text && type === 'text') {
       return res.status(400).json({ message: 'Text is required for text status' });
@@ -35,7 +33,6 @@ router.post('/create', authMiddleware, async (req, res) => {
 
     await status.save();
 
-    console.log('✅ Status created:', status._id);
     res.status(201).json({
       success: true,
       message: 'Status posted successfully!',
@@ -48,7 +45,7 @@ router.post('/create', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// UPLOAD STATUS MEDIA (Image/Video with optional text)
+// UPLOAD MEDIA STATUS (Image/Video with optional text)
 // ============================================
 router.post('/upload', authMiddleware, upload.single('media'), async (req, res) => {
   try {
@@ -60,7 +57,6 @@ router.post('/upload', authMiddleware, upload.single('media'), async (req, res) 
     const mediaUrl = `/uploads/${req.file.filename}`;
     const now = new Date();
 
-    // Determine status type
     let statusType = type || 'image';
     if (text && type === 'image') statusType = 'image_text';
     else if (text && type === 'video') statusType = 'video_text';
@@ -81,7 +77,6 @@ router.post('/upload', authMiddleware, upload.single('media'), async (req, res) 
 
     await status.save();
 
-    console.log('✅ Status media uploaded:', status._id);
     res.status(201).json({
       success: true,
       message: 'Status posted successfully!',
@@ -94,7 +89,7 @@ router.post('/upload', authMiddleware, upload.single('media'), async (req, res) 
 });
 
 // ============================================
-// GET ALL ACTIVE STATUSES
+// GET ALL ACTIVE STATUSES (with viewer details)
 // ============================================
 router.get('/', authMiddleware, async (req, res) => {
   try {
@@ -102,9 +97,10 @@ router.get('/', authMiddleware, async (req, res) => {
       expiresAt: { $gt: new Date() },
     })
       .populate('userId', 'name phoneNumber profilePic onlineStatus')
+      .populate('viewedBy', 'name phoneNumber profilePic') // 👈 populate viewer details
       .sort({ createdAt: -1 });
 
-    // Group statuses by user
+    // Group by user
     const grouped = {};
     statuses.forEach((s) => {
       const uid = s.userId._id.toString();
@@ -114,15 +110,16 @@ router.get('/', authMiddleware, async (req, res) => {
           statuses: [],
         };
       }
-      grouped[uid].statuses.push(s);
+      const statusObj = s.toObject();
+      statusObj.viewedBy = s.viewedBy || [];
+      grouped[uid].statuses.push(statusObj);
     });
 
-    // Add viewed status for current user
     const result = Object.values(grouped).map((group) => {
       const statusesWithView = group.statuses.map((s) => {
-        const isViewed = s.viewedBy.includes(req.userId);
+        const isViewed = s.viewedBy.some((v) => v._id.toString() === req.userId);
         return {
-          ...s.toObject(),
+          ...s,
           isViewed,
         };
       });
@@ -151,6 +148,7 @@ router.post('/view/:statusId', authMiddleware, async (req, res) => {
       return res.status(404).json({ message: 'Status not found' });
     }
 
+    // Prevent self-view (optional) – but it's fine to allow
     if (!status.viewedBy.includes(req.userId)) {
       status.viewedBy.push(req.userId);
       await status.save();
@@ -164,7 +162,7 @@ router.post('/view/:statusId', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// DELETE STATUS
+// DELETE STATUS (only owner)
 // ============================================
 router.delete('/:statusId', authMiddleware, async (req, res) => {
   try {
@@ -192,7 +190,7 @@ router.delete('/:statusId', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// DOWNLOAD STATUS
+// DOWNLOAD STATUS MEDIA (any user can download if they have access)
 // ============================================
 router.get('/download/:statusId', authMiddleware, async (req, res) => {
   try {
