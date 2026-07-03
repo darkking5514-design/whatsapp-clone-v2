@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, X, Download, Trash2, Eye, Send, Reply, Camera, Type, Video } from 'lucide-react';
+import { Plus, X, Download, Trash2, Eye, Reply, Camera, Type, Video, Send } from 'lucide-react';
 import api, { SOCKET_URL } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
@@ -11,7 +11,7 @@ export default function Status() {
   const [statuses, setStatuses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [viewing, setViewing] = useState(null); // status object currently being viewed
+  const [viewing, setViewing] = useState(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [statusText, setStatusText] = useState('');
   const [statusType, setStatusType] = useState('text');
@@ -48,7 +48,6 @@ export default function Status() {
     if (!status.isViewed) {
       try {
         await api.post(`/status/view/${status._id}`);
-        // update local state to mark as viewed
         setStatuses(prev =>
           prev.map(group => ({
             ...group,
@@ -91,7 +90,17 @@ export default function Status() {
   function replyToStatus(status) {
     const userId = status.userId?._id || status.userId;
     if (userId) {
-      navigate(`/chat/${userId}`);
+      navigate(`/chat/${userId}`, {
+        state: {
+          replyToStatus: {
+            text: status.text || '',
+            mediaUrl: status.mediaUrl || '',
+            type: status.type || 'text',
+            username: status.userId?.name || 'Unknown',
+            userId: userId,
+          }
+        }
+      });
     }
   }
 
@@ -162,7 +171,6 @@ export default function Status() {
     return uid === user.id;
   };
 
-  // ---- Render statuses grouped ----
   return (
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
@@ -205,43 +213,38 @@ export default function Status() {
                   {userInfo._id === user.id && ' (You)'}
                 </p>
                 <div className="flex gap-2 overflow-x-auto pb-2">
-                  {userStatuses.map((s) => {
-                    const isMine = isMyStatus(s);
-                    const isViewed = s.isViewed;
-                    return (
-                      <button
-                        key={s._id}
-                        onClick={() => viewStatus(s)}
-                        className="relative flex-shrink-0 group"
-                      >
-                        <div className={`w-16 h-16 rounded-full overflow-hidden border-2 ${
-                          isViewed ? 'border-gray-500' : 'border-whatsapp-green'
-                        } hover:border-whatsapp-teal transition-colors`}>
-                          {s.type === 'text' || s.type === 'image_text' || s.type === 'video_text' ? (
-                            <div
-                              className="w-full h-full flex items-center justify-center text-white text-xs font-bold p-1 text-center"
-                              style={{ backgroundColor: s.backgroundColor || '#075E54' }}
-                            >
-                              {s.text ? s.text.substring(0, 2).toUpperCase() : '📝'}
-                            </div>
-                          ) : s.type === 'image' ? (
-                            <img src={`${SOCKET_URL}${s.mediaUrl}`} alt="status" className="w-full h-full object-cover" />
-                          ) : s.type === 'video' ? (
-                            <video src={`${SOCKET_URL}${s.mediaUrl}`} className="w-full h-full object-cover" />
-                          ) : null}
-                        </div>
-                        {/* Remove badge – no view count shown here */}
-                        {isMine && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteStatus(s._id); }}
-                            className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                  {userStatuses.map((s) => (
+                    <button
+                      key={s._id}
+                      onClick={() => viewStatus(s)}
+                      className="relative flex-shrink-0 group"
+                    >
+                      <div className={`w-16 h-16 rounded-full overflow-hidden border-2 ${
+                        s.isViewed ? 'border-gray-500' : 'border-whatsapp-green'
+                      } hover:border-whatsapp-teal transition-colors`}>
+                        {s.type === 'text' || s.type === 'image_text' || s.type === 'video_text' ? (
+                          <div
+                            className="w-full h-full flex items-center justify-center text-white text-xs font-bold p-1 text-center"
+                            style={{ backgroundColor: s.backgroundColor || '#075E54' }}
                           >
-                            <Trash2 size={12} />
-                          </button>
-                        )}
-                      </button>
-                    );
-                  })}
+                            {s.text ? s.text.substring(0, 2).toUpperCase() : '📝'}
+                          </div>
+                        ) : s.type === 'image' ? (
+                          <img src={`${SOCKET_URL}${s.mediaUrl}`} alt="status" className="w-full h-full object-cover" />
+                        ) : s.type === 'video' ? (
+                          <video src={`${SOCKET_URL}${s.mediaUrl}`} className="w-full h-full object-cover" />
+                        ) : null}
+                      </div>
+                      {isMyStatus(s) && (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteStatus(s._id); }}
+                          className="absolute -top-1 -right-1 bg-red-500 text-white p-0.5 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </button>
+                  ))}
                 </div>
               </div>
             );
@@ -374,11 +377,131 @@ export default function Status() {
         </div>
       )}
 
-      {/* ===== CREATE STATUS MODAL (unchanged) ===== */}
+      {/* ===== CREATE STATUS MODAL ===== */}
       {showCreateModal && (
-        // ... same as before, keep your existing create modal
-        // I'll omit for brevity – it remains unchanged.
-        <div>Your existing create modal goes here</div>
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-white font-medium">Add Status</h2>
+              <button
+                onClick={() => {
+                  setShowCreateModal(false);
+                  setStatusText('');
+                  setStatusFile(null);
+                  setStatusPreview(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Status Type Selector */}
+            <div className="flex gap-2 mb-3">
+              <button
+                onClick={() => setStatusType('text')}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusType === 'text' ? 'bg-whatsapp-green text-black' : 'bg-[#2a3942] text-gray-400'
+                }`}
+              >
+                <Type size={16} className="inline mr-1" /> Text
+              </button>
+              <button
+                onClick={() => { setStatusType('image'); document.getElementById('fileInput')?.click(); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusType === 'image' ? 'bg-whatsapp-green text-black' : 'bg-[#2a3942] text-gray-400'
+                }`}
+              >
+                <Camera size={16} className="inline mr-1" /> Photo
+              </button>
+              <button
+                onClick={() => { setStatusType('video'); document.getElementById('videoInput')?.click(); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  statusType === 'video' ? 'bg-whatsapp-green text-black' : 'bg-[#2a3942] text-gray-400'
+                }`}
+              >
+                <Video size={16} className="inline mr-1" /> Video
+              </button>
+            </div>
+
+            <input
+              id="fileInput"
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleFileSelect}
+            />
+            <input
+              id="videoInput"
+              type="file"
+              ref={videoInputRef}
+              className="hidden"
+              accept="video/*"
+              onChange={handleFileSelect}
+            />
+
+            {/* Color Selector */}
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {colors.map((c) => (
+                <button
+                  key={c}
+                  onClick={() => setStatusColor(c)}
+                  className={`w-8 h-8 rounded-full border-2 ${
+                    statusColor === c ? 'border-white' : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: c }}
+                />
+              ))}
+            </div>
+
+            {/* Preview Area */}
+            {statusType === 'text' && (
+              <div
+                className="rounded-lg p-4 mb-3 min-h-[150px] flex items-center justify-center"
+                style={{ backgroundColor: statusColor }}
+              >
+                <textarea
+                  value={statusText}
+                  onChange={(e) => setStatusText(e.target.value)}
+                  placeholder="What's on your mind?"
+                  className="w-full bg-transparent text-white text-lg text-center outline-none resize-none"
+                  rows={3}
+                  style={{ color: '#FFFFFF' }}
+                />
+              </div>
+            )}
+
+            {(statusType === 'image' || statusType === 'video') && statusPreview && (
+              <div className="relative rounded-lg overflow-hidden mb-3">
+                {statusType === 'image' ? (
+                  <img src={statusPreview} alt="preview" className="w-full max-h-[300px] object-contain" />
+                ) : (
+                  <video src={statusPreview} className="w-full max-h-[300px] object-contain" controls />
+                )}
+                <textarea
+                  value={statusText}
+                  onChange={(e) => setStatusText(e.target.value)}
+                  placeholder="Add caption..."
+                  className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm p-2 outline-none resize-none"
+                  rows={2}
+                />
+              </div>
+            )}
+
+            <button
+              onClick={statusType === 'text' ? createTextStatus : uploadMediaStatus}
+              disabled={uploading || (!statusText.trim() && !statusFile)}
+              className="w-full bg-whatsapp-green text-black font-medium rounded-md py-2 hover:opacity-90 disabled:opacity-50 transition-opacity flex items-center justify-center gap-2"
+            >
+              {uploading ? 'Posting...' : (
+                <>
+                  <Send size={18} /> Post Status
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

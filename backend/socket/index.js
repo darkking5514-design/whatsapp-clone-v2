@@ -40,7 +40,7 @@ function initSocket(io) {
     });
 
     // ============================================
-    // SEND MESSAGE (with duration for audio)
+    // SEND MESSAGE (with statusReply support)
     // ============================================
     socket.on('send_message', async (data, ack) => {
       try {
@@ -53,7 +53,8 @@ function initSocket(io) {
           replyTo,
           forwarded,
           originalSender,
-          duration, // 👈 new field
+          duration,
+          statusReply, // 👈 new field
         } = data;
 
         console.log(`📤 Sending message from ${senderId} to ${receiverId}`);
@@ -78,7 +79,8 @@ function initSocket(io) {
           replyTo: replyTo || null,
           forwarded: forwarded || false,
           originalSender: originalSender || null,
-          duration: duration || 0, // store duration
+          duration: duration || 0,
+          statusReply: statusReply || null, // 👈 store status reply
           timestamp: new Date(),
         });
 
@@ -180,7 +182,7 @@ function initSocket(io) {
     });
 
     // ============================================
-    // READ RECEIPTS - WITH UNREAD COUNT
+    // READ RECEIPTS
     // ============================================
     socket.on('mark_read', async ({ senderId, receiverId }) => {
       try {
@@ -193,7 +195,6 @@ function initSocket(io) {
 
         console.log(`✅ ${result.modifiedCount} messages marked as read`);
 
-        // Tell sender that messages are read (for unread badge clearing)
         const senderSocketId = getSocketId(senderId);
         if (senderSocketId) {
           io.to(senderSocketId).emit('messages_read', { by: receiverId });
@@ -265,7 +266,6 @@ function initSocket(io) {
           });
           console.log(`👤 ${currentUserId} is now offline`);
 
-          // Broadcast to all users
           io.emit('user_offline', { userId: currentUserId, lastSeen });
         } catch (err) {
           console.error('❌ Failed to update offline status:', err.message);

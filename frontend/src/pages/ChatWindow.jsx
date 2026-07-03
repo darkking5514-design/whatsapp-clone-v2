@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video, 
   MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
@@ -13,6 +13,7 @@ let typingTimeout = null;
 
 export default function ChatWindow() {
   const { userId: otherUserId } = useParams();
+  const location = useLocation();
   const { user } = useAuth();
   const { socket, connected, onlineUsers } = useSocket();
   const navigate = useNavigate();
@@ -42,9 +43,26 @@ export default function ChatWindow() {
   const recordingTimerRef = useRef(null);
   const recordingStartRef = useRef(null);
   const audioRefs = useRef({});
-
-  // Prevent double sends
   const sendingRef = useRef(false);
+
+  // ---- Status reply from navigation ----
+  const [statusReply, setStatusReply] = useState(null);
+
+  useEffect(() => {
+    if (location.state?.replyToStatus) {
+      const statusData = location.state.replyToStatus;
+      setStatusReply(statusData);
+      setReplyTo({
+        _id: 'status-' + Date.now(),
+        content: statusData.text || (statusData.type === 'image' ? '📷 Photo' : statusData.type === 'video' ? '🎥 Video' : 'Status'),
+        messageType: statusData.type || 'text',
+        sender: otherUserId,
+        isStatusReply: true,
+        statusData: statusData,
+        username: statusData.username,
+      });
+    }
+  }, [location.state, otherUserId]);
 
   // ---- Load other user ----
   useEffect(() => {
@@ -87,9 +105,7 @@ export default function ChatWindow() {
     if (!socket || !connected) return;
 
     const onReceiveMessage = (message) => {
-      // Ignore messages sent by ourselves – they are already added via ack
       if (message.sender === user.id) return;
-
       if (message.sender === otherUserId || message.receiver === otherUserId) {
         setMessages((prev) => [...prev, message]);
         if (message.sender === otherUserId) {
@@ -150,7 +166,7 @@ export default function ChatWindow() {
     }, 1500);
   };
 
-  // ---- Send message with anti-duplicate guard ----
+  // ---- Send message (with statusReply support) ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
@@ -167,7 +183,14 @@ export default function ChatWindow() {
       receiverId: otherUserId,
       ...payload,
     };
-    if (replyTo) messageData.replyTo = replyTo._id;
+
+    if (replyTo) {
+      if (replyTo.isStatusReply && replyTo.statusData) {
+        messageData.statusReply = replyTo.statusData;
+      } else {
+        messageData.replyTo = replyTo._id;
+      }
+    }
 
     sendingRef.current = true;
 
@@ -176,6 +199,7 @@ export default function ChatWindow() {
       if (response?.success) {
         setMessages((prev) => [...prev, response.message]);
         setReplyTo(null);
+        setStatusReply(null);
       } else {
         console.error('Failed to send message:', response?.error);
       }
@@ -251,7 +275,6 @@ export default function ChatWindow() {
       mediaRecorderRef.current.stop();
       clearInterval(recordingTimerRef.current);
       setIsRecording(false);
-      // Recompute final duration from actual elapsed time
       if (recordingStartRef.current) {
         const elapsed = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
         setRecordingTime(elapsed);
@@ -274,9 +297,7 @@ export default function ChatWindow() {
     if (!audioBlob) return;
     setUploading(true);
     try {
-      // Use the already tracked recordingTime as duration
       const duration = recordingTime;
-
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
       const formData = new FormData();
       formData.append('media', file);
@@ -420,13 +441,15 @@ export default function ChatWindow() {
           <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54] flex-shrink-0">
             <div className="flex-1">
               <p className="text-xs text-whatsapp-green font-medium">
-                Replying to {replyTo.sender === user.id ? 'yourself' : otherUser?.name}
+                {replyTo.isStatusReply ? `Replying to ${replyTo.username}'s status` : 
+                  `Replying to ${replyTo.sender === user.id ? 'yourself' : otherUser?.name}`}
               </p>
               <p className="text-sm text-gray-300 truncate max-w-[200px]">
-                {replyTo.messageType === 'text' ? replyTo.content : '📎 Media'}
+                {replyTo.isStatusReply ? (replyTo.content || 'Status') : 
+                  (replyTo.messageType === 'text' ? replyTo.content : '📎 Media')}
               </p>
             </div>
-            <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-white p-1">
+            <button onClick={() => { setReplyTo(null); setStatusReply(null); }} className="text-gray-400 hover:text-white p-1">
               <X size={18} />
             </button>
           </div>
@@ -453,6 +476,25 @@ export default function ChatWindow() {
             return (
               <div key={m._id} className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}>
                 <div className="relative max-w-[75%]">
+                  {/* ---- Status Reply Quote ---- */}
+                  {m.statusReply && (
+                    <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-300">
+                      <p className="font-medium text-whatsapp-green">
+                        Replying to {m.statusReply.username}'s status
+                      </p>
+                      {m.statusReply.type === 'text' && (
+                        <p className="truncate max-w-[200px]">{m.statusReply.text}</p>
+                      )}
+                      {m.statusReply.type === 'image' && (
+                        <p className="truncate max-w-[200px]">📷 Photo</p>
+                      )}
+                      {m.statusReply.type === 'video' && (
+                        <p className="truncate max-w-[200px]">🎥 Video</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ---- Regular Reply Preview ---- */}
                   {isReply && replyMessage && !replyMessage.deleted && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-400">
                       <p className="font-medium text-whatsapp-green">
@@ -463,6 +505,7 @@ export default function ChatWindow() {
                       </p>
                     </div>
                   )}
+
                   {isForwarded && (
                     <p className="text-[10px] text-gray-400 italic mb-1">Forwarded</p>
                   )}
@@ -512,7 +555,7 @@ export default function ChatWindow() {
                       </a>
                     )}
 
-                    {/* ===== VOICE MESSAGE ===== */}
+                    {/* Voice Message */}
                     {m.messageType === 'audio' && m.mediaUrl && (
                       <div className="flex items-center gap-3 min-w-[160px]">
                         <button
@@ -543,9 +586,6 @@ export default function ChatWindow() {
                           onError={() => console.error('Audio load error for message:', m._id)}
                           className="hidden"
                         />
-                        {!audioRefs.current[m._id]?.src && (
-                          <span className="text-xs text-red-400">Unavailable</span>
-                        )}
                       </div>
                     )}
 
@@ -599,7 +639,6 @@ export default function ChatWindow() {
 
         {/* ===== INPUT AREA ===== */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
-          {/* Attachment */}
           <input
             type="file"
             ref={fileInputRef}
@@ -616,7 +655,6 @@ export default function ChatWindow() {
             <Paperclip size={20} />
           </button>
 
-          {/* Voice Recording UI */}
           {!isRecording && !audioURL && (
             <button
               type="button"
@@ -657,7 +695,6 @@ export default function ChatWindow() {
             </div>
           )}
 
-          {/* Text Input */}
           {!isRecording && !audioURL && (
             <input
               id="messageInput"
@@ -668,7 +705,6 @@ export default function ChatWindow() {
             />
           )}
 
-          {/* Send Button */}
           {!isRecording && !audioURL && text.trim() && (
             <button
               type="submit"

@@ -53,10 +53,20 @@ const messageSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.ObjectId],
       default: [],
     },
-    // ---- NEW: Duration for voice messages ----
     duration: {
       type: Number,
-      default: 0, // seconds
+      default: 0,
+    },
+    // 👇 NEW: For status replies
+    statusReply: {
+      type: {
+        text: { type: String, default: '' },
+        mediaUrl: { type: String, default: '' },
+        type: { type: String, enum: ['text', 'image', 'video'], default: 'text' },
+        username: { type: String, default: '' },
+        userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+      },
+      default: null,
     },
     timestamp: {
       type: Date,
@@ -66,7 +76,6 @@ const messageSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Index for efficient message retrieval
 messageSchema.index({ sender: 1, receiver: 1, timestamp: 1 });
 
 module.exports = mongoose.model('Message', messageSchema);
