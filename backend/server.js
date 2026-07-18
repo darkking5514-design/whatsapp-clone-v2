@@ -88,7 +88,13 @@ app.get('/', (req, res) => {
   res.send('WhatsApp Clone Backend is running!');
 });
 
+// ---- Socket.IO Endpoint Test ----
+app.get('/socket.io', (req, res) => {
+  res.send('Socket.IO endpoint is active');
+});
+
 // ---- Socket.IO Setup ----
+console.log('🔌 Initializing Socket.IO...');
 const io = new Server(server, {
   cors: {
     origin: allowedOrigins,
@@ -97,9 +103,11 @@ const io = new Server(server, {
   },
   path: '/socket.io',
   transports: ['websocket', 'polling'],
+  allowEIO3: true,
 });
 
 initSocket(io);
+console.log('✅ Socket.IO initialized');
 
 // ---- MongoDB Connection ----
 console.log('🔍 Connecting to MongoDB...');
