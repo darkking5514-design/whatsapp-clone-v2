@@ -2,13 +2,13 @@ const express = require('express');
 const User = require('../models/User');
 const authMiddleware = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
-const { sendOTP, verifyOTP } = require('../services/otpService');
+const { sendOTP, verifyOTP, verifyOTPWithVerify } = require('../services/otpService');
 
 const router = express.Router();
 const JWT_SECRET = process.env.JWT_SECRET || 'meri_super_secret_key_123456789';
 
 // ============================================
-// 1. REQUEST OTP - WhatsApp ke through send karein
+// 1. REQUEST OTP - Via SMS (Twilio Verify)
 // ============================================
 router.post('/request-otp', async (req, res) => {
   try {
@@ -21,10 +21,8 @@ router.post('/request-otp', async (req, res) => {
       });
     }
 
-    // Clean phone number (remove spaces, dashes, etc.)
     const cleanedPhone = phoneNumber.trim();
     
-    // Validate phone number format (basic check)
     if (!cleanedPhone.match(/^\+[0-9]{10,15}$/)) {
       return res.status(400).json({ 
         success: false,
@@ -32,28 +30,25 @@ router.post('/request-otp', async (req, res) => {
       });
     }
 
-    // Generate 6-digit OTP
+    // Generate OTP for database (fallback)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
+    const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
     console.log(`🔍 Checking user with phone: ${cleanedPhone}`);
 
-    // Check if user exists
     let user = await User.findOne({ phoneNumber: cleanedPhone });
     let isNewUser = false;
 
     if (user) {
-      // Update OTP for existing user
       user.otp = otp;
       user.otpExpiry = otpExpiry;
       await user.save();
       console.log(`✅ Existing user found: ${user.name}`);
     } else {
-      // New user - create with placeholder name
       isNewUser = true;
       user = new User({
         phoneNumber: cleanedPhone,
-        name: 'User', // placeholder, they'll update on first login
+        name: 'User',
         otp,
         otpExpiry,
       });
@@ -62,25 +57,25 @@ router.post('/request-otp', async (req, res) => {
     }
 
     // ============================================
-    // SEND OTP VIA WHATSAPP (TWILIO)
+    // SEND OTP VIA SMS (TWILIO VERIFY)
     // ============================================
-    console.log(`📱 Sending OTP ${otp} to ${cleanedPhone} via WhatsApp...`);
-    const result = await sendOTP(cleanedPhone, otp);
+    console.log(`📱 Sending OTP to ${cleanedPhone} via SMS...`);
+    const result = await sendOTP(cleanedPhone);
     
     if (result.success) {
-      console.log('✅ OTP sent successfully via WhatsApp!');
+      console.log('✅ OTP sent successfully via SMS!');
     } else {
-      console.log(`⚠️ WhatsApp failed. Use OTP: ${otp} (testing mode)`);
+      console.log(`⚠️ SMS failed. Use OTP: ${otp} (testing mode)`);
       console.log(`❌ Error: ${result.error}`);
     }
 
     res.json({
       success: true,
-      message: result.success ? 'OTP sent via WhatsApp!' : 'OTP generated (WhatsApp failed, check console)',
+      message: result.success ? 'OTP sent via SMS!' : 'OTP generated (SMS failed, check console)',
       isNewUser,
       // For testing only - remove in production
       devOtp: otp,
-      whatsappStatus: result.success ? 'sent' : 'failed',
+      smsStatus: result.success ? 'sent' : 'failed',
       phoneNumber: cleanedPhone,
     });
     
@@ -109,7 +104,6 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    // Clean phone number
     const cleanedPhone = phoneNumber.trim();
 
     // Find user
@@ -123,15 +117,21 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // ============================================
-    // VERIFY OTP using service
+    // VERIFY OTP using Twilio Verify (preferred)
     // ============================================
-    const verification = verifyOTP(user, otp);
+    let verificationResult = await verifyOTPWithVerify(cleanedPhone, otp);
     
-    if (!verification.success) {
-      return res.status(400).json({
-        success: false,
-        message: verification.message
-      });
+    // If Twilio Verify fails, fallback to local verification
+    if (!verificationResult.success) {
+      console.log('⚠️ Twilio Verify failed, trying local verification...');
+      const localVerification = verifyOTP(user, otp);
+      if (!localVerification.success) {
+        return res.status(400).json({
+          success: false,
+          message: localVerification.message
+        });
+      }
+      verificationResult = { success: true };
     }
 
     // Clear OTP after verification
@@ -237,14 +237,14 @@ router.post('/resend-otp', async (req, res) => {
     user.otpExpiry = otpExpiry;
     await user.save();
 
-    // Send OTP via WhatsApp
-    const result = await sendOTP(cleanedPhone, otp);
+    // Send OTP via Twilio Verify
+    const result = await sendOTP(cleanedPhone);
 
     res.json({
       success: true,
-      message: result.success ? 'OTP resent successfully!' : 'OTP generated (WhatsApp failed)',
+      message: result.success ? 'OTP resent successfully!' : 'OTP generated (SMS failed)',
       devOtp: otp,
-      whatsappStatus: result.success ? 'sent' : 'failed',
+      smsStatus: result.success ? 'sent' : 'failed',
     });
     
   } catch (err) {

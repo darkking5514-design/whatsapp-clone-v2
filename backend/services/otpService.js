@@ -1,77 +1,72 @@
-// ============================================
-// OTP SERVICE - WhatsApp OTP via Twilio
-// ============================================
-
 const twilio = require('twilio');
 
-// ============================================
-// Get credentials from environment variables
-// ============================================
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
-const fromNumber = process.env.TWILIO_WHATSAPP_NUMBER || '+14155238886';
+const verifyServiceSid = process.env.TWILIO_VERIFY_SERVICE_SID;
 
-console.log('🔍 Twilio Config Check:');
-console.log('Account SID:', accountSid ? '✅ Loaded' : '❌ NOT FOUND');
-console.log('Auth Token:', authToken ? '✅ Loaded' : '❌ NOT FOUND');
-console.log('From Number:', fromNumber || '❌ NOT FOUND');
-
-// Initialize Twilio client
 const client = twilio(accountSid, authToken);
 
 // ============================================
-// SEND OTP - WhatsApp
+// SEND OTP via Twilio Verify (SMS)
 // ============================================
-async function sendOTP(phoneNumber, otp) {
+async function sendOTP(phoneNumber) {
   try {
-    console.log(`📱 Sending OTP ${otp} to ${phoneNumber}...`);
+    const verification = await client.verify.v2
+      .services(verifyServiceSid)
+      .verifications.create({
+        to: phoneNumber,
+        channel: 'sms',
+      });
 
-    // Format numbers for WhatsApp
-    const to = `whatsapp:${phoneNumber}`;
-    const from = `whatsapp:${fromNumber}`;
+    console.log(`📱 OTP sent via SMS to ${phoneNumber}`);
+    console.log(`📋 Verification SID: ${verification.sid}`);
+    console.log(`📋 Status: ${verification.status}`);
 
-    console.log('📋 To:', to);
-    console.log('📋 From:', from);
-
-    // Send message via Twilio WhatsApp
-    const message = await client.messages.create({
-      body: `Your WhatsApp Clone OTP is: ${otp}\nValid for 5 minutes.`,
-      from: from,
-      to: to,
-    });
-
-    console.log('✅ OTP sent via WhatsApp! SID:', message.sid);
-    return { success: true, sid: message.sid };
+    return { success: true, sid: verification.sid };
 
   } catch (error) {
-    console.error('❌ Twilio Error:', error.message);
+    console.error('❌ Twilio Verify Error:', error.message);
     console.error('📋 Error Code:', error.code);
-    console.error('📋 More Info:', error.moreInfo);
     return { success: false, error: error.message };
   }
 }
 
 // ============================================
-// VERIFY OTP (Database check)
+// VERIFY OTP using Twilio Verify
 // ============================================
-function verifyOTP(user, otp) {
-  // Check if OTP matches
-  if (user.otp !== otp) {
-    return { success: false, message: 'Invalid OTP' };
-  }
+async function verifyOTPWithVerify(phoneNumber, code) {
+  try {
+    const verificationCheck = await client.verify.v2
+      .services(verifyServiceSid)
+      .verificationChecks.create({
+        to: phoneNumber,
+        code: code,
+      });
 
-  // Check if OTP is expired
-  if (user.otpExpiry < new Date()) {
-    return { success: false, message: 'OTP expired. Please request a new one.' };
-  }
+    console.log(`✅ Verification check: ${verificationCheck.status}`);
+    return { success: verificationCheck.status === 'approved' };
 
-  return { success: true };
+  } catch (error) {
+    console.error('❌ Verification check error:', error.message);
+    return { success: false, error: error.message };
+  }
 }
 
 // ============================================
-// EXPORT MODULES
+// VERIFY OTP (Database fallback)
 // ============================================
+function verifyOTP(user, otp) {
+  if (user.otp !== otp) {
+    return { success: false, message: 'Invalid OTP' };
+  }
+  if (user.otpExpiry < new Date()) {
+    return { success: false, message: 'OTP expired' };
+  }
+  return { success: true };
+}
+
 module.exports = {
   sendOTP,
   verifyOTP,
+  verifyOTPWithVerify,
 };
