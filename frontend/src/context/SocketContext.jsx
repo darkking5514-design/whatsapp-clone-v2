@@ -25,7 +25,6 @@ export function SocketProvider({ children }) {
     console.log(`🔌 Connecting to socket server: ${SOCKET_URL}`);
     console.log(`👤 User ID: ${user.id}`);
 
-    // Ensure we have a valid user ID
     if (!user.id) {
       console.error('❌ User ID is undefined - cannot connect socket');
       return;
@@ -34,17 +33,15 @@ export function SocketProvider({ children }) {
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       withCredentials: true,
+      path: '/socket.io', // ✅ Explicit path
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       timeout: 10000,
     });
 
     socketRef.current = socket;
-    window.__socket = socket; // For debugging
+    window.__socket = socket;
 
-    // ============================================
-    // SOCKET EVENT HANDLERS
-    // ============================================
     socket.on('connect', () => {
       console.log(`✅ Socket connected! ID: ${socket.id}`);
       setConnected(true);
@@ -70,9 +67,6 @@ export function SocketProvider({ children }) {
       }
     });
 
-    // ============================================
-    // USER PRESENCE
-    // ============================================
     socket.on('user_online', ({ userId }) => {
       console.log(`🟢 User online: ${userId}`);
       setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
@@ -87,17 +81,10 @@ export function SocketProvider({ children }) {
       });
     });
 
-    // ============================================
-    // MESSAGES
-    // ============================================
     socket.on('receive_message', (message) => {
       console.log('📩 Received message:', message);
-      // ChatWindow component handles this via its own listener
     });
 
-    // ============================================
-    // CALLS
-    // ============================================
     socket.on('call_offer', ({ from, offer, callType, callerName }) => {
       console.log(`📞 Incoming call from: ${callerName}`);
       setIncomingCall({ from, offer, callType, callerName });
@@ -113,9 +100,6 @@ export function SocketProvider({ children }) {
       setIncomingCall(null);
     });
 
-    // ============================================
-    // CLEANUP
-    // ============================================
     return () => {
       console.log('🔌 Cleaning up socket...');
       socket.disconnect();
@@ -124,16 +108,10 @@ export function SocketProvider({ children }) {
     };
   }, [user]);
 
-  // ============================================
-  // CLEAR INCOMING CALL
-  // ============================================
   function clearIncomingCall() {
     setIncomingCall(null);
   }
 
-  // ============================================
-  // CONTEXT PROVIDER
-  // ============================================
   return (
     <SocketContext.Provider
       value={{
