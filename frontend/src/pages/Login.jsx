@@ -36,6 +36,7 @@ export default function Login() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [devOtp, setDevOtp] = useState('');
 
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -54,6 +55,7 @@ export default function Login() {
     try {
       const res = await api.post('/auth/request-otp', { phoneNumber: fullNumber });
       setIsNewUser(res.data.isNewUser || false);
+      setDevOtp(res.data.devOtp || '');
       setStep('otp');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to request OTP. Please try again.');
@@ -110,8 +112,9 @@ export default function Login() {
     return (
       <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
+          {/* WhatsApp Logo */}
           <div className="flex flex-col items-center mb-6">
-            <div className="w-16 h-16 rounded-full bg-whatsapp-green flex items-center justify-center mb-4">
+            <div className="w-16 h-16 rounded-full bg-[#25D366] flex items-center justify-center mb-4">
               <MessageCircle className="text-white" size={32} />
             </div>
             <h1 className="text-2xl font-light text-gray-800">WhatsApp Clone</h1>
@@ -123,6 +126,7 @@ export default function Login() {
 
           <form onSubmit={requestOTP}>
             <div className="space-y-4">
+              {/* Country Selector */}
               <div className="relative">
                 <select
                   value={selectedCountry.code}
@@ -130,7 +134,7 @@ export default function Login() {
                     const selected = countries.find(c => c.code === e.target.value);
                     if (selected) setSelectedCountry(selected);
                   }}
-                  className="w-full appearance-none border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent bg-white"
+                  className="w-full appearance-none border border-gray-300 rounded-lg px-4 py-3 text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent bg-white"
                 >
                   {countries.map((country) => (
                     <option key={country.code} value={country.code}>
@@ -141,9 +145,10 @@ export default function Login() {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
               </div>
 
+              {/* Phone Input */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Phone number</label>
-                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-whatsapp-green focus-within:border-transparent">
+                <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#25D366] focus-within:border-transparent">
                   <span className="bg-gray-100 px-3 py-3 text-gray-600 font-medium">
                     {selectedCountry.code}
                   </span>
@@ -171,7 +176,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
+                className="w-full bg-[#25D366] text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
               >
                 {loading ? 'Sending...' : 'Next'}
               </button>
@@ -189,8 +194,9 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
+        {/* WhatsApp Logo */}
         <div className="flex flex-col items-center mb-6">
-          <div className="w-16 h-16 rounded-full bg-whatsapp-green flex items-center justify-center mb-4">
+          <div className="w-16 h-16 rounded-full bg-[#25D366] flex items-center justify-center mb-4">
             <MessageCircle className="text-white" size={32} />
           </div>
           <h1 className="text-2xl font-light text-gray-800">WhatsApp Clone</h1>
@@ -202,6 +208,7 @@ export default function Login() {
 
         <form onSubmit={verifyOTP}>
           <div className="space-y-4">
+            {/* OTP Input */}
             <div>
               <input
                 type="text"
@@ -209,11 +216,18 @@ export default function Login() {
                 onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
                 placeholder="6-digit code"
                 maxLength={6}
-                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
+                className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
                 required
               />
+              {/* Testing OTP - Show only in development */}
+              {devOtp && (
+                <p className="text-xs text-gray-400 text-center mt-2">
+                  Testing OTP: <span className="font-mono text-[#25D366] font-bold">{devOtp}</span>
+                </p>
+              )}
             </div>
 
+            {/* Name Input (New User) */}
             {isNewUser && (
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Your name</label>
@@ -222,7 +236,7 @@ export default function Login() {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="John Doe"
-                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
+                  className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#25D366] focus:border-transparent"
                   required
                 />
               </div>
@@ -237,7 +251,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
+              className="w-full bg-[#25D366] text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
             >
               {loading ? 'Verifying...' : 'Verify & Login'}
             </button>

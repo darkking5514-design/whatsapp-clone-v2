@@ -69,11 +69,12 @@ router.post('/request-otp', async (req, res) => {
       console.log(`❌ Error: ${result.error}`);
     }
 
-    // ⚠️ IMPORTANT: No devOtp is sent in response - only real SMS OTP works!
+    // ✅ Testing OTP included for development purposes
     res.json({
       success: true,
-      message: result.success ? 'OTP sent via SMS!' : 'Failed to send OTP. Please try again.',
+      message: result.success ? 'OTP sent via SMS!' : 'OTP generated (SMS failed, check console)',
       isNewUser,
+      devOtp: otp,  // 👈 Testing OTP - remove in production
       phoneNumber: cleanedPhone,
     });
     
@@ -119,7 +120,7 @@ router.post('/verify-otp', async (req, res) => {
     // ============================================
     let verificationResult = await verifyOTPWithVerify(cleanedPhone, otp);
     
-    // If Twilio Verify fails, fallback to local verification (only as backup)
+    // If Twilio Verify fails, fallback to local verification
     if (!verificationResult.success) {
       console.log('⚠️ Twilio Verify failed, trying local verification...');
       const localVerification = verifyOTP(user, otp);
@@ -247,6 +248,7 @@ router.post('/resend-otp', async (req, res) => {
     res.json({
       success: true,
       message: result.success ? 'OTP resent successfully!' : 'Failed to resend OTP. Please try again.',
+      devOtp: otp,  // 👈 Testing OTP for resend
     });
     
   } catch (err) {
