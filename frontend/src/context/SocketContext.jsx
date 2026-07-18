@@ -33,7 +33,7 @@ export function SocketProvider({ children }) {
     const socket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
       withCredentials: true,
-      path: '/socket.io', // ✅ Explicit path
+      path: '/socket.io',
       reconnectionAttempts: 10,
       reconnectionDelay: 1000,
       timeout: 10000,
@@ -42,6 +42,7 @@ export function SocketProvider({ children }) {
     socketRef.current = socket;
     window.__socket = socket;
 
+    // ---- Connect ----
     socket.on('connect', () => {
       console.log(`✅ Socket connected! ID: ${socket.id}`);
       setConnected(true);
@@ -67,6 +68,7 @@ export function SocketProvider({ children }) {
       }
     });
 
+    // ---- User Presence ----
     socket.on('user_online', ({ userId }) => {
       console.log(`🟢 User online: ${userId}`);
       setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
@@ -81,10 +83,18 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // ---- Messages ----
     socket.on('receive_message', (message) => {
       console.log('📩 Received message:', message);
+      // ChatWindow component handles this via its own listener
     });
 
+    socket.on('receive_group_message', (message) => {
+      console.log('📩 Received group message:', message);
+      // GroupChat component handles this via its own listener
+    });
+
+    // ---- Calls ----
     socket.on('call_offer', ({ from, offer, callType, callerName }) => {
       console.log(`📞 Incoming call from: ${callerName}`);
       setIncomingCall({ from, offer, callType, callerName });
@@ -100,6 +110,39 @@ export function SocketProvider({ children }) {
       setIncomingCall(null);
     });
 
+    socket.on('call_answer', ({ from, answer }) => {
+      console.log(`📞 Call answered by: ${from}`);
+      // Handled by Call.jsx component
+    });
+
+    socket.on('call_ice_candidate', ({ from, candidate }) => {
+      console.log(`🧊 ICE candidate from: ${from}`);
+      // Handled by Call.jsx component
+    });
+
+    // ---- Message Read Receipts ----
+    socket.on('messages_read', ({ by }) => {
+      console.log(`📖 Messages read by: ${by}`);
+      // Handled by ChatWindow component
+    });
+
+    socket.on('message_deleted', ({ messageId, deleteFor }) => {
+      console.log(`🗑️ Message deleted: ${messageId} for ${deleteFor}`);
+      // Handled by ChatWindow component
+    });
+
+    // ---- Typing ----
+    socket.on('typing', ({ from }) => {
+      console.log(`✍️ ${from} is typing...`);
+      // Handled by ChatWindow component
+    });
+
+    socket.on('stop_typing', ({ from }) => {
+      console.log(`✍️ ${from} stopped typing`);
+      // Handled by ChatWindow component
+    });
+
+    // ---- Cleanup ----
     return () => {
       console.log('🔌 Cleaning up socket...');
       socket.disconnect();
@@ -108,6 +151,7 @@ export function SocketProvider({ children }) {
     };
   }, [user]);
 
+  // ---- Clear incoming call ----
   function clearIncomingCall() {
     setIncomingCall(null);
   }
