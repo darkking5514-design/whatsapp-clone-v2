@@ -30,7 +30,7 @@ router.post('/request-otp', async (req, res) => {
       });
     }
 
-    // Generate OTP for database (fallback)
+    // Generate OTP for database (fallback verification only)
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     const otpExpiry = new Date(Date.now() + 5 * 60 * 1000);
 
@@ -65,17 +65,15 @@ router.post('/request-otp', async (req, res) => {
     if (result.success) {
       console.log('✅ OTP sent successfully via SMS!');
     } else {
-      console.log(`⚠️ SMS failed. Use OTP: ${otp} (testing mode)`);
+      console.log(`⚠️ SMS failed for ${cleanedPhone}`);
       console.log(`❌ Error: ${result.error}`);
     }
 
+    // ⚠️ IMPORTANT: No devOtp is sent in response - only real SMS OTP works!
     res.json({
       success: true,
-      message: result.success ? 'OTP sent via SMS!' : 'OTP generated (SMS failed, check console)',
+      message: result.success ? 'OTP sent via SMS!' : 'Failed to send OTP. Please try again.',
       isNewUser,
-      // For testing only - remove in production
-      devOtp: otp,
-      smsStatus: result.success ? 'sent' : 'failed',
       phoneNumber: cleanedPhone,
     });
     
@@ -117,11 +115,11 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     // ============================================
-    // VERIFY OTP using Twilio Verify (preferred)
+    // VERIFY OTP using Twilio Verify (primary)
     // ============================================
     let verificationResult = await verifyOTPWithVerify(cleanedPhone, otp);
     
-    // If Twilio Verify fails, fallback to local verification
+    // If Twilio Verify fails, fallback to local verification (only as backup)
     if (!verificationResult.success) {
       console.log('⚠️ Twilio Verify failed, trying local verification...');
       const localVerification = verifyOTP(user, otp);
@@ -240,11 +238,15 @@ router.post('/resend-otp', async (req, res) => {
     // Send OTP via Twilio Verify
     const result = await sendOTP(cleanedPhone);
 
+    if (result.success) {
+      console.log('✅ OTP resent successfully!');
+    } else {
+      console.log(`⚠️ SMS resend failed for ${cleanedPhone}`);
+    }
+
     res.json({
       success: true,
-      message: result.success ? 'OTP resent successfully!' : 'OTP generated (SMS failed)',
-      devOtp: otp,
-      smsStatus: result.success ? 'sent' : 'failed',
+      message: result.success ? 'OTP resent successfully!' : 'Failed to resend OTP. Please try again.',
     });
     
   } catch (err) {

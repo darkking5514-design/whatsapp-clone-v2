@@ -4,7 +4,6 @@ import { MessageCircle, ChevronDown } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 
-// List of countries with codes and flags
 const countries = [
   { code: '+92', flag: '🇵🇰', label: 'Pakistan' },
   { code: '+91', flag: '🇮🇳', label: 'India' },
@@ -29,7 +28,7 @@ const countries = [
 ];
 
 export default function Login() {
-  const [step, setStep] = useState('phone'); // 'phone' | 'otp'
+  const [step, setStep] = useState('phone');
   const [selectedCountry, setSelectedCountry] = useState(countries[0]);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [otp, setOtp] = useState('');
@@ -37,12 +36,10 @@ export default function Login() {
   const [isNewUser, setIsNewUser] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [devOtp, setDevOtp] = useState('');
 
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  // ---- Request OTP ----
   const requestOTP = async (e) => {
     e.preventDefault();
     if (!phoneNumber.trim()) {
@@ -57,7 +54,6 @@ export default function Login() {
     try {
       const res = await api.post('/auth/request-otp', { phoneNumber: fullNumber });
       setIsNewUser(res.data.isNewUser || false);
-      setDevOtp(res.data.devOtp || '');
       setStep('otp');
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to request OTP. Please try again.');
@@ -66,7 +62,6 @@ export default function Login() {
     }
   };
 
-  // ---- Verify OTP ----
   const verifyOTP = async (e) => {
     e.preventDefault();
     if (!otp.trim()) {
@@ -106,18 +101,15 @@ export default function Login() {
     }
   };
 
-  // ---- Helper to format display ----
   const formatPhoneDisplay = () => {
     if (!phoneNumber) return selectedCountry.code;
     return selectedCountry.code + ' ' + phoneNumber;
   };
 
-  // ---- Render phone step ----
   if (step === 'phone') {
     return (
       <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
-          {/* WhatsApp Logo / Icon */}
           <div className="flex flex-col items-center mb-6">
             <div className="w-16 h-16 rounded-full bg-whatsapp-green flex items-center justify-center mb-4">
               <MessageCircle className="text-white" size={32} />
@@ -125,15 +117,12 @@ export default function Login() {
             <h1 className="text-2xl font-light text-gray-800">WhatsApp Clone</h1>
           </div>
 
-          {/* Title */}
           <h2 className="text-center text-sm font-medium text-gray-600 mb-6">
             Enter your phone number
           </h2>
 
-          {/* Phone Input */}
           <form onSubmit={requestOTP}>
             <div className="space-y-4">
-              {/* Country selector */}
               <div className="relative">
                 <select
                   value={selectedCountry.code}
@@ -152,7 +141,6 @@ export default function Login() {
                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={18} />
               </div>
 
-              {/* Phone number */}
               <div>
                 <label className="block text-xs font-medium text-gray-500 mb-1">Phone number</label>
                 <div className="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-whatsapp-green focus-within:border-transparent">
@@ -171,9 +159,7 @@ export default function Login() {
                     required
                   />
                 </div>
-                <p className="text-xs text-gray-400 mt-1">
-                  Use international format
-                </p>
+                <p className="text-xs text-gray-400 mt-1">Use international format</p>
               </div>
 
               {error && (
@@ -185,7 +171,7 @@ export default function Login() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-whatsapp-green text-white font-medium rounded-full py-3 hover:bg-green-600 transition-colors disabled:opacity-50"
               >
                 {loading ? 'Sending...' : 'Next'}
               </button>
@@ -200,7 +186,6 @@ export default function Login() {
     );
   }
 
-  // ---- OTP verification step ----
   return (
     <div className="min-h-screen bg-[#f0f2f5] flex items-center justify-center p-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-lg p-6">
@@ -227,11 +212,6 @@ export default function Login() {
                 className="w-full border border-gray-300 rounded-lg px-4 py-3 text-center text-lg tracking-widest focus:outline-none focus:ring-2 focus:ring-whatsapp-green focus:border-transparent"
                 required
               />
-              {devOtp && (
-                <p className="text-xs text-gray-400 text-center mt-2">
-                  Testing OTP: <span className="font-mono text-whatsapp-green">{devOtp}</span>
-                </p>
-              )}
             </div>
 
             {isNewUser && (
