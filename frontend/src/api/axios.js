@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 // ============================================
-// API & SOCKET URLS – Production (Railway)
+// API & SOCKET URLS
 // ============================================
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://whatsapp-clone-v2-production-3853.up.railway.app/api';
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'https://whatsapp-clone-v2-production-3853.up.railway.app';
