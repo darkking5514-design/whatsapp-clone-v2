@@ -132,7 +132,6 @@ router.post('/change-phone', authMiddleware, async (req, res) => {
       return res.status(400).json({ message: 'Phone and OTP required' });
     }
 
-    // Verify OTP (simplified – use proper verification)
     const user = await User.findById(req.userId);
     if (user.otp !== otp || user.otpExpiry < new Date()) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
@@ -208,7 +207,6 @@ router.delete('/delete', authMiddleware, async (req, res) => {
     const { passkey } = req.body;
     const user = await User.findById(req.userId);
 
-    // Verify passkey if set
     if (user.passkey) {
       const isValid = await bcrypt.compare(passkey, user.passkey);
       if (!isValid) {
@@ -216,13 +214,11 @@ router.delete('/delete', authMiddleware, async (req, res) => {
       }
     }
 
-    // Soft delete – mark as inactive
     user.isActive = false;
     user.deletedAt = new Date();
     user.onlineStatus = false;
     await user.save();
 
-    // Socket.IO: emit user offline
     const io = req.app.get('io');
     if (io) {
       io.emit('user_offline', { userId: req.userId });
@@ -236,7 +232,7 @@ router.delete('/delete', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// LOGOUT (Clear token)
+// LOGOUT
 // ============================================
 router.post('/logout', authMiddleware, async (req, res) => {
   try {

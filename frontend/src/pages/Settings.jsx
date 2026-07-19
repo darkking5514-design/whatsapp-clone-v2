@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   User, Camera, Edit3, Lock, LogOut, Trash2, Phone,
   Eye, EyeOff, Clock, Palette, Download, FileText, Type,
-  SwitchAccount, ChevronRight, Moon, Sun
+  SwitchAccount, ChevronRight, Moon, Sun, Circle, CheckCircle
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -16,7 +16,6 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('account');
 
-  // ---- Load profile ----
   useEffect(() => {
     async function loadProfile() {
       try {
@@ -31,7 +30,6 @@ export default function Settings() {
     loadProfile();
   }, []);
 
-  // ---- Tabs ----
   const tabs = [
     { id: 'account', label: 'Account', icon: User },
     { id: 'profile', label: 'Profile', icon: Edit3 },
@@ -54,7 +52,6 @@ export default function Settings() {
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
         <div className="bg-[#202c33] px-4 py-3">
           <h1 className="text-white text-lg font-semibold">Settings</h1>
         </div>
@@ -79,27 +76,27 @@ export default function Settings() {
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {activeTab === 'account' && (
-            <AccountSettings profile={profile} onLogout={logout} />
-          )}
-          {activeTab === 'profile' && (
-            <ProfileSettings profile={profile} setProfile={setProfile} />
-          )}
-          {activeTab === 'privacy' && (
-            <PrivacySettings profile={profile} setProfile={setProfile} />
-          )}
-          {activeTab === 'chats' && (
-            <ChatSettings />
-          )}
+          {activeTab === 'account' && <AccountSettings profile={profile} onLogout={logout} />}
+          {activeTab === 'profile' && <ProfileSettings profile={profile} setProfile={setProfile} />}
+          {activeTab === 'privacy' && <PrivacySettings profile={profile} setProfile={setProfile} />}
+          {activeTab === 'chats' && <ChatSettings />}
         </div>
       </div>
     </div>
   );
 }
 
-// ---- Account Settings Component ----
+// ============================================
+// ACCOUNT SETTINGS
+// ============================================
 function AccountSettings({ profile, onLogout }) {
   const navigate = useNavigate();
+  const [showChangePhone, setShowChangePhone] = useState(false);
+  const [newPhone, setNewPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [showPasskey, setShowPasskey] = useState(false);
+  const [passkey, setPasskey] = useState('');
+  const [confirmPasskey, setConfirmPasskey] = useState('');
 
   const handleDelete = async () => {
     if (!confirm('Are you sure you want to delete your account? This cannot be undone.')) return;
@@ -112,8 +109,41 @@ function AccountSettings({ profile, onLogout }) {
     }
   };
 
+  const handleChangePhone = async () => {
+    try {
+      await api.post('/profile/change-phone', { newPhoneNumber: newPhone, otp });
+      alert('Phone number updated successfully!');
+      setShowChangePhone(false);
+      setNewPhone('');
+      setOtp('');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to change phone number');
+    }
+  };
+
+  const handleSetPasskey = async () => {
+    if (passkey.length < 4) {
+      alert('Passkey must be at least 4 digits');
+      return;
+    }
+    if (passkey !== confirmPasskey) {
+      alert('Passkeys do not match');
+      return;
+    }
+    try {
+      await api.post('/profile/set-passkey', { passkey });
+      alert('Passkey set successfully!');
+      setShowPasskey(false);
+      setPasskey('');
+      setConfirmPasskey('');
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to set passkey');
+    }
+  };
+
   return (
     <div className="space-y-4">
+      {/* Phone Number */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Phone Number</h2>
         <div className="flex items-center justify-between">
@@ -121,39 +151,95 @@ function AccountSettings({ profile, onLogout }) {
             <p className="text-white">{profile?.phoneNumber}</p>
             <p className="text-xs text-gray-400">Your current phone number</p>
           </div>
-          <button className="text-whatsapp-green text-sm hover:underline">Change</button>
+          <button
+            onClick={() => setShowChangePhone(!showChangePhone)}
+            className="text-whatsapp-green text-sm hover:underline"
+          >
+            Change
+          </button>
         </div>
+        {showChangePhone && (
+          <div className="mt-3 space-y-2">
+            <input
+              type="tel"
+              value={newPhone}
+              onChange={(e) => setNewPhone(e.target.value)}
+              placeholder="New phone number +923001234567"
+              className="w-full bg-[#2a3942] text-white rounded-lg px-3 py-2 outline-none text-sm"
+            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="OTP"
+                className="flex-1 bg-[#2a3942] text-white rounded-lg px-3 py-2 outline-none text-sm"
+              />
+              <button className="bg-whatsapp-green text-black px-3 py-2 rounded-lg text-sm font-medium">
+                Send OTP
+              </button>
+            </div>
+            <button
+              onClick={handleChangePhone}
+              className="w-full bg-whatsapp-green text-black rounded-lg py-2 text-sm font-medium hover:opacity-90"
+            >
+              Update Phone
+            </button>
+          </div>
+        )}
       </div>
 
+      {/* Security */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Security</h2>
-        <button className="w-full flex items-center justify-between py-2 border-b border-black/10">
+        <button
+          onClick={() => setShowPasskey(!showPasskey)}
+          className="w-full flex items-center justify-between py-2 border-b border-black/10"
+        >
           <div className="flex items-center gap-3">
             <Lock size={18} className="text-gray-400" />
             <span className="text-white">Passkey</span>
           </div>
           <ChevronRight size={18} className="text-gray-400" />
         </button>
-        <button className="w-full flex items-center justify-between py-2">
-          <div className="flex items-center gap-3">
-            <Phone size={18} className="text-gray-400" />
-            <span className="text-white">Two-factor authentication</span>
+        {showPasskey && (
+          <div className="mt-2 space-y-2">
+            <input
+              type="password"
+              value={passkey}
+              onChange={(e) => setPasskey(e.target.value)}
+              placeholder="Enter 4+ digit passkey"
+              className="w-full bg-[#2a3942] text-white rounded-lg px-3 py-2 outline-none text-sm"
+            />
+            <input
+              type="password"
+              value={confirmPasskey}
+              onChange={(e) => setConfirmPasskey(e.target.value)}
+              placeholder="Confirm passkey"
+              className="w-full bg-[#2a3942] text-white rounded-lg px-3 py-2 outline-none text-sm"
+            />
+            <button
+              onClick={handleSetPasskey}
+              className="w-full bg-whatsapp-green text-black rounded-lg py-2 text-sm font-medium hover:opacity-90"
+            >
+              Set Passkey
+            </button>
           </div>
-          <ChevronRight size={18} className="text-gray-400" />
-        </button>
+        )}
       </div>
 
+      {/* Actions */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <button
           onClick={onLogout}
-          className="w-full flex items-center gap-3 py-2 text-red-400"
+          className="w-full flex items-center gap-3 py-2 text-red-400 hover:bg-[#2a3942] rounded px-2 transition-colors"
         >
           <LogOut size={18} />
           <span>Logout</span>
         </button>
         <button
           onClick={handleDelete}
-          className="w-full flex items-center gap-3 py-2 text-red-400"
+          className="w-full flex items-center gap-3 py-2 text-red-400 hover:bg-[#2a3942] rounded px-2 transition-colors"
         >
           <Trash2 size={18} />
           <span>Delete Account</span>
@@ -163,7 +249,9 @@ function AccountSettings({ profile, onLogout }) {
   );
 }
 
-// ---- Profile Settings Component ----
+// ============================================
+// PROFILE SETTINGS
+// ============================================
 function ProfileSettings({ profile, setProfile }) {
   const [name, setName] = useState(profile?.name || '');
   const [username, setUsername] = useState(profile?.username || '');
@@ -286,7 +374,9 @@ function ProfileSettings({ profile, setProfile }) {
   );
 }
 
-// ---- Privacy Settings Component ----
+// ============================================
+// PRIVACY SETTINGS
+// ============================================
 function PrivacySettings({ profile, setProfile }) {
   const [privacy, setPrivacy] = useState(profile?.privacy || {});
 
@@ -405,7 +495,9 @@ function PrivacySettings({ profile, setProfile }) {
   );
 }
 
-// ---- Chat Settings Component ----
+// ============================================
+// CHAT SETTINGS
+// ============================================
 function ChatSettings() {
   const [fontSize, setFontSize] = useState(16);
   const [theme, setTheme] = useState('dark');
