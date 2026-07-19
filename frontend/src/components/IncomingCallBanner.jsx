@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Phone, PhoneOff, Video } from 'lucide-react';
 import { useSocket } from '../context/SocketContext';
 import { useAuth } from '../context/AuthContext';
+import { getFullUrl } from '../api/axios';
 
 export default function IncomingCallBanner() {
   const { incomingCall, clearIncomingCall, socket } = useSocket();
@@ -28,11 +29,19 @@ export default function IncomingCallBanner() {
   return (
     <div className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between bg-[#202c33] border-b border-whatsapp-green px-4 py-3 shadow-lg">
       <div className="flex items-center gap-3 text-white">
-        <div className="w-10 h-10 rounded-full bg-whatsapp-green flex items-center justify-center font-bold text-black">
-          {(callerName || 'U')[0].toUpperCase()}
+        <div className="w-10 h-10 rounded-full bg-whatsapp-green flex items-center justify-center font-bold text-black overflow-hidden">
+          {callerName?.profilePic ? (
+            <img
+              src={getFullUrl(callerName.profilePic)}
+              alt="Caller"
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            (callerName?.name || (typeof callerName === 'string' ? callerName : 'U'))[0]?.toUpperCase() || 'U'
+          )}
         </div>
         <div>
-          <p className="font-medium">{callerName || 'Someone'}</p>
+          <p className="font-medium">{typeof callerName === 'string' ? callerName : callerName?.name || 'Someone'}</p>
           <p className="text-xs text-gray-400">
             Incoming {callType === 'video' ? 'video' : 'voice'} call...
           </p>

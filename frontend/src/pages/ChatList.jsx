@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Users } from 'lucide-react';
-import api from '../api/axios';
+import api, { getFullUrl } from '../api/axios';
 import { useSocket } from '../context/SocketContext';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
@@ -82,11 +82,10 @@ export default function ChatList() {
   };
 
   return (
-    <div className="flex h-dvh bg-[#111b21] overflow-hidden">
+    <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Sticky header */}
-        <div className="sticky top-0 z-20 bg-[#202c33] px-4 py-3 flex justify-between items-center border-b border-[#2f3b41] flex-shrink-0">
+      <div className="flex-1 flex flex-col">
+        <div className="bg-[#202c33] px-4 py-3 flex justify-between items-center">
           <h1 className="text-white text-lg font-semibold">Chats</h1>
           <button
             onClick={() => setShowCreateGroup(true)}
@@ -97,8 +96,7 @@ export default function ChatList() {
           </button>
         </div>
 
-        {/* Search bar */}
-        <div className="px-3 py-2 bg-[#111b21] flex-shrink-0">
+        <div className="px-3 py-2 bg-[#111b21]">
           <div className="flex items-center gap-2 bg-[#202c33] rounded-lg px-3 py-2">
             <Search size={16} className="text-gray-400" />
             <input
@@ -110,8 +108,7 @@ export default function ChatList() {
           </div>
         </div>
 
-        {/* Chat list – bottom padding for mobile nav */}
-        <div className="flex-1 overflow-y-auto pb-[76px] md:pb-0">
+        <div className="flex-1 overflow-y-auto pb-24 md:pb-0">
           {loading && <p className="text-gray-400 text-center mt-6">Loading...</p>}
           {!loading && items.length === 0 && (
             <p className="text-gray-400 text-center mt-6">
@@ -131,7 +128,7 @@ export default function ChatList() {
                   <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
                     {item.profilePic ? (
                       <img
-                        src={item.profilePic}
+                        src={getFullUrl(item.profilePic)}
                         alt={item.name}
                         className="w-full h-full object-cover"
                       />
@@ -167,7 +164,7 @@ export default function ChatList() {
                 </div>
 
                 {unread > 0 && (
-                  <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5 flex-shrink-0">
+                  <div className="min-w-[20px] h-5 bg-whatsapp-green text-black text-xs font-bold rounded-full flex items-center justify-center px-1.5">
                     {unread > 99 ? '99+' : unread}
                   </div>
                 )}

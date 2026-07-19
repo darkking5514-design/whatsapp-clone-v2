@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, UserPlus, Check, X, UserMinus, MessageCircle } from 'lucide-react';
-import api from '../api/axios';
+import api, { getFullUrl } from '../api/axios';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
@@ -18,7 +18,6 @@ export default function AddFriends() {
   const [message, setMessage] = useState('');
   const [searching, setSearching] = useState(false);
 
-  // ---- Load friends and pending requests ----
   const loadData = async () => {
     try {
       const [friendsRes, pendingRes] = await Promise.all([
@@ -36,7 +35,6 @@ export default function AddFriends() {
     loadData();
   }, []);
 
-  // ---- Search users ----
   const handleSearch = async (e) => {
     e.preventDefault();
     if (!searchQuery.trim()) {
@@ -48,7 +46,6 @@ export default function AddFriends() {
     setMessage('');
     try {
       const res = await api.get(`/friends/search?q=${searchQuery}`);
-      // Filter out current user and existing friends
       const filtered = res.data.filter(u => u._id !== user.id);
       setSearchResults(filtered);
       if (filtered.length === 0) {
@@ -62,21 +59,18 @@ export default function AddFriends() {
     }
   };
 
-  // ---- Send friend request ----
   const sendRequest = async (friendId, username) => {
     setMessage('');
     try {
       await api.post('/friends/request', { friendId });
       setMessage(`✅ Friend request sent to ${username}!`);
       await loadData();
-      // Remove from search results
       setSearchResults(prev => prev.filter(u => u._id !== friendId));
     } catch (err) {
       setMessage(`❌ ${err.response?.data?.message || 'Request failed'}`);
     }
   };
 
-  // ---- Accept friend request ----
   const acceptRequest = async (requestId, username) => {
     try {
       await api.put(`/friends/accept/${requestId}`);
@@ -87,7 +81,6 @@ export default function AddFriends() {
     }
   };
 
-  // ---- Reject friend request ----
   const rejectRequest = async (requestId, username) => {
     try {
       await api.delete(`/friends/reject/${requestId}`);
@@ -98,7 +91,6 @@ export default function AddFriends() {
     }
   };
 
-  // ---- Remove friend ----
   const removeFriend = async (friendId, username) => {
     if (!confirm(`Remove ${username} from your friends?`)) return;
     try {
@@ -110,31 +102,26 @@ export default function AddFriends() {
     }
   };
 
-  // ---- Check if user is already friend ----
   const isFriend = (userId) => {
     return friends.some((f) => f._id === userId);
   };
 
-  // ---- Check if request already sent ----
   const hasPendingRequest = (userId) => {
     return pendingRequests.some(
       (p) => p.userId?._id === userId || p.userId === userId
     );
   };
 
-  // ---- Check if request is pending from this user ----
   const isPendingFrom = (userId) => {
     return pendingRequests.some(
       (p) => p.friendId?._id === userId || p.friendId === userId
     );
   };
 
-  // ---- Navigate to chat ----
   const openChat = (friendId) => {
     navigate(`/chat/${friendId}`);
   };
 
-  // ---- Get request status for a user ----
   const getRequestStatus = (userId) => {
     if (isFriend(userId)) return 'friend';
     if (hasPendingRequest(userId)) return 'pending_sent';
@@ -147,12 +134,10 @@ export default function AddFriends() {
       <Sidebar />
 
       <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
         <div className="bg-[#202c33] px-4 py-3">
           <h1 className="text-white text-lg font-semibold">👥 Add Friends</h1>
         </div>
 
-        {/* Message */}
         {message && (
           <div className={`px-4 py-2 text-sm ${
             message.includes('✅') ? 'bg-green-600/20 text-green-400' :
@@ -163,7 +148,6 @@ export default function AddFriends() {
           </div>
         )}
 
-        {/* Search Bar */}
         <div className="px-4 py-3 bg-[#111b21] border-b border-black/20">
           <form onSubmit={handleSearch} className="flex gap-2">
             <div className="flex-1 flex items-center gap-2 bg-[#202c33] rounded-lg px-3 py-2">
@@ -185,7 +169,6 @@ export default function AddFriends() {
           </form>
         </div>
 
-        {/* Search Results */}
         {searchResults.length > 0 && (
           <div className="px-4 py-2 bg-[#1f2a30] border-b border-black/20 overflow-y-auto max-h-60">
             <h2 className="text-xs text-gray-400 uppercase tracking-wider mb-2">Search Results</h2>
@@ -196,8 +179,16 @@ export default function AddFriends() {
               return (
                 <div key={u._id} className="flex items-center justify-between py-2 border-b border-black/10 last:border-0">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {u.name?.[0]?.toUpperCase() || u.username?.[0]?.toUpperCase() || '?'}
+                    <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0 overflow-hidden">
+                      {u.profilePic ? (
+                        <img
+                          src={getFullUrl(u.profilePic)}
+                          alt={u.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        u.name?.[0]?.toUpperCase() || '?'
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-medium truncate">
@@ -238,7 +229,6 @@ export default function AddFriends() {
           </div>
         )}
 
-        {/* Pending Requests Section */}
         {pendingRequests.length > 0 && (
           <div className="px-4 py-2 bg-[#1f2a30] border-b border-black/20">
             <h2 className="text-xs text-gray-400 uppercase tracking-wider">
@@ -249,8 +239,16 @@ export default function AddFriends() {
               return (
                 <div key={req._id} className="flex items-center justify-between py-2 border-b border-black/10 last:border-0">
                   <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
-                      {sender?.name?.[0]?.toUpperCase() || sender?.username?.[0]?.toUpperCase() || '?'}
+                    <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-white font-semibold flex-shrink-0 overflow-hidden">
+                      {sender?.profilePic ? (
+                        <img
+                          src={getFullUrl(sender.profilePic)}
+                          alt={sender?.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        sender?.name?.[0]?.toUpperCase() || '?'
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-white text-sm font-medium truncate">
@@ -281,7 +279,6 @@ export default function AddFriends() {
           </div>
         )}
 
-        {/* Friends List */}
         <div className="flex-1 overflow-y-auto px-4 py-2">
           <h2 className="text-xs text-gray-400 uppercase tracking-wider mb-2">
             👫 My Friends ({friends.length})
@@ -299,8 +296,16 @@ export default function AddFriends() {
                 className="flex items-center justify-between py-2 border-b border-black/10 hover:bg-[#202c33] px-2 rounded-lg transition-colors"
               >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0">
-                    {f.name?.[0]?.toUpperCase() || f.username?.[0]?.toUpperCase() || '?'}
+                  <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0 overflow-hidden">
+                    {f.profilePic ? (
+                      <img
+                        src={getFullUrl(f.profilePic)}
+                        alt={f.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      f.name?.[0]?.toUpperCase() || '?'
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-white text-sm font-medium truncate">

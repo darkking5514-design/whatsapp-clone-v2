@@ -4,7 +4,7 @@ import {
   ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video,
   MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
 } from 'lucide-react';
-import api, { SOCKET_URL } from '../api/axios';
+import api, { SOCKET_URL, getFullUrl } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { useSocket } from '../context/SocketContext';
 import Sidebar from '../components/Sidebar';
@@ -32,7 +32,6 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -45,7 +44,6 @@ export default function ChatWindow() {
   const audioRefs = useRef({});
   const sendingRef = useRef(false);
 
-  // ---- Status reply from navigation ----
   const [statusReply, setStatusReply] = useState(null);
 
   useEffect(() => {
@@ -64,7 +62,6 @@ export default function ChatWindow() {
     }
   }, [location.state, otherUserId]);
 
-  // ---- Load other user ----
   useEffect(() => {
     async function loadUser() {
       try {
@@ -79,7 +76,6 @@ export default function ChatWindow() {
     if (otherUserId) loadUser();
   }, [otherUserId]);
 
-  // ---- Load chat history ----
   useEffect(() => {
     async function loadHistory() {
       try {
@@ -93,26 +89,22 @@ export default function ChatWindow() {
     if (user && otherUserId) loadHistory();
   }, [otherUserId, user]);
 
-  // ---- Mark messages as read ----
   useEffect(() => {
     if (socket && connected && user && otherUserId) {
       socket.emit('mark_read', { senderId: otherUserId, receiverId: user.id });
     }
   }, [socket, connected, otherUserId, user]);
 
-  // ---- Socket listeners ----
   useEffect(() => {
     if (!socket || !connected) return;
 
     const onReceiveMessage = (message) => {
       console.log('📩 Received message:', message);
-      
       const senderId = message.sender?._id || message.sender;
       const receiverId = message.receiver?._id || message.receiver;
 
       if (senderId === otherUserId || receiverId === otherUserId) {
         setMessages((prev) => [...prev, message]);
-
         if (senderId === otherUserId) {
           socket.emit('mark_read', {
             senderId: otherUserId,
@@ -166,14 +158,12 @@ export default function ChatWindow() {
     };
   }, [socket, connected, otherUserId, user]);
 
-  // ---- Scroll to bottom ----
   useEffect(() => {
     if (bottomRef.current) {
       bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isTyping]);
 
-  // ---- Typing ----
   const handleTextChange = (e) => {
     setText(e.target.value);
     if (!socket || !connected) return;
@@ -184,7 +174,6 @@ export default function ChatWindow() {
     }, 1500);
   };
 
-  // ---- Send message ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
@@ -232,7 +221,6 @@ export default function ChatWindow() {
     socket?.emit('stop_typing', { to: otherUserId, from: user.id });
   };
 
-  // ---- File upload ----
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -255,7 +243,6 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Voice Recording ----
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -311,7 +298,6 @@ export default function ChatWindow() {
     }
   };
 
-  // ---- Send Voice Message (Fixed) ----
   const sendVoiceMessage = async () => {
     if (!audioBlob) {
       console.error('❌ No audio blob to send');
@@ -391,7 +377,6 @@ export default function ChatWindow() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // ---- Reply / Forward / Delete / Download ----
   const handleReply = (message) => {
     setReplyTo(message);
     setShowMessageMenu(null);
@@ -460,14 +445,21 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative min-h-0">
-        {/* Header */}
         <div className="sticky top-0 z-20 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
               <ArrowLeft size={22} />
             </button>
-            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0 text-sm md:text-base">
-              {otherUser?.name?.[0]?.toUpperCase() || '?'}
+            <div className="w-9 h-9 md:w-10 md:h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold shrink-0 text-sm md:text-base overflow-hidden">
+              {otherUser?.profilePic ? (
+                <img
+                  src={getFullUrl(otherUser.profilePic)}
+                  alt={otherUser?.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                otherUser?.name?.[0]?.toUpperCase() || '?'
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-white font-medium truncate text-sm md:text-base">
@@ -488,7 +480,6 @@ export default function ChatWindow() {
           </div>
         </div>
 
-        {/* Reply Preview */}
         {replyTo && (
           <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54] flex-shrink-0">
             <div className="flex-1">
@@ -508,7 +499,6 @@ export default function ChatWindow() {
           </div>
         )}
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-3 md:px-10 py-4 space-y-2">
           {messages.length === 0 && (
             <p className="text-gray-400 text-center mt-10 text-sm">No messages yet. Say hello! 👋</p>
@@ -650,7 +640,6 @@ export default function ChatWindow() {
                     </div>
                   </div>
 
-                  {/* Message Menu */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
                     className="absolute -top-2 -right-2 p-1 bg-[#202c33] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -689,7 +678,6 @@ export default function ChatWindow() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input Area */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
@@ -775,7 +763,6 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* Forward Modal */}
       {showForwardModal && (
         <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center">
           <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[80vh]">
@@ -812,8 +799,16 @@ export default function ChatWindow() {
                     }}
                     className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#2a3942]"
                   >
-                    <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-sm">
-                      {u.name?.[0]?.toUpperCase() || '?'}
+                    <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-sm overflow-hidden">
+                      {u.profilePic ? (
+                        <img
+                          src={getFullUrl(u.profilePic)}
+                          alt={u.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        u.name?.[0]?.toUpperCase() || '?'
+                      )}
                     </div>
                     <p className="text-white text-sm">{u.name}</p>
                   </button>

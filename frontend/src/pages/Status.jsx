@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, X, Download, Trash2, Eye, Reply, Camera, Type, Video, Send } from 'lucide-react';
-import api, { SOCKET_URL } from '../api/axios';
+import api, { SOCKET_URL, getFullUrl } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 
@@ -24,7 +24,6 @@ export default function Status() {
 
   const colors = ['#075E54', '#128C7E', '#25D366', '#1A1A2E', '#16213E', '#0F3460', '#533483', '#E94560', '#F5A623'];
 
-  // ---- Load statuses ----
   async function loadStatuses() {
     try {
       const res = await api.get('/status');
@@ -42,13 +41,11 @@ export default function Status() {
     return () => clearInterval(interval);
   }, []);
 
-  // ---- Helper: check if status belongs to current user ----
   const isMyStatus = (status) => {
     const uid = status.userId?._id || status.userId;
     return uid === user.id;
   };
 
-  // ---- View status ----
   async function viewStatus(status) {
     setViewing(status);
     if (isMyStatus(status)) {
@@ -71,7 +68,6 @@ export default function Status() {
     }
   }
 
-  // ---- Delete status ----
   async function deleteStatus(statusId) {
     if (!confirm('Delete this status?')) return;
     try {
@@ -83,7 +79,6 @@ export default function Status() {
     }
   }
 
-  // ---- Download media ----
   function downloadStatus(mediaUrl, type) {
     const fullUrl = `${SOCKET_URL}${mediaUrl}`;
     const link = document.createElement('a');
@@ -95,7 +90,6 @@ export default function Status() {
     document.body.removeChild(link);
   }
 
-  // ---- Reply to status ----
   function replyToStatus(status) {
     const userId = status.userId?._id || status.userId;
     if (userId) {
@@ -113,12 +107,10 @@ export default function Status() {
     }
   }
 
-  // ---- Viewers list ----
   function getViewers(status) {
     return status.viewedBy || [];
   }
 
-  // ---- Create status handlers ----
   const createTextStatus = async (e) => {
     e.preventDefault();
     if (!statusText.trim()) return;
@@ -179,7 +171,6 @@ export default function Status() {
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
       <div className="flex-1 flex flex-col">
-        {/* Header */}
         <div className="bg-[#202c33] px-4 py-3 flex items-center justify-between">
           <h1 className="text-white text-lg font-semibold">Status</h1>
           <button
@@ -190,10 +181,17 @@ export default function Status() {
           </button>
         </div>
 
-        {/* My Status */}
         <div className="px-4 py-3 border-b border-black/20 flex items-center gap-3">
-          <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg">
-            {user?.name?.[0]?.toUpperCase() || '?'}
+          <div className="w-12 h-12 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
+            {user?.profilePic ? (
+              <img
+                src={getFullUrl(user.profilePic)}
+                alt="Profile"
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              user?.name?.[0]?.toUpperCase() || '?'
+            )}
           </div>
           <div>
             <p className="text-white font-medium">My Status</p>
@@ -201,7 +199,6 @@ export default function Status() {
           </div>
         </div>
 
-        {/* Status List */}
         <div className="flex-1 overflow-y-auto">
           {loading && <p className="text-gray-400 text-center mt-6">Loading statuses...</p>}
           {!loading && statuses.length === 0 && (
@@ -234,12 +231,11 @@ export default function Status() {
                             {s.text ? s.text.substring(0, 2).toUpperCase() : '📝'}
                           </div>
                         ) : s.type === 'image' ? (
-                          <img src={`${SOCKET_URL}${s.mediaUrl}`} alt="status" className="w-full h-full object-cover" />
+                          <img src={getFullUrl(s.mediaUrl)} alt="status" className="w-full h-full object-cover" />
                         ) : s.type === 'video' ? (
-                          <video src={`${SOCKET_URL}${s.mediaUrl}`} className="w-full h-full object-cover" />
+                          <video src={getFullUrl(s.mediaUrl)} className="w-full h-full object-cover" />
                         ) : null}
                       </div>
-                      {/* ❌ Removed view count badge from here */}
                       {isMyStatus(s) && (
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteStatus(s._id); }}
@@ -257,7 +253,6 @@ export default function Status() {
         </div>
       </div>
 
-      {/* ===== VIEW STATUS MODAL ===== */}
       {viewing && (
         <div className="fixed inset-0 bg-black/95 z-50 flex items-center justify-center">
           <button
@@ -269,8 +264,16 @@ export default function Status() {
 
           <div className="max-w-lg w-full px-4 relative">
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
-                {viewing.userId?.name?.[0]?.toUpperCase() || '?'}
+              <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold overflow-hidden">
+                {viewing.userId?.profilePic ? (
+                  <img
+                    src={getFullUrl(viewing.userId.profilePic)}
+                    alt={viewing.userId?.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  viewing.userId?.name?.[0]?.toUpperCase() || '?'
+                )}
               </div>
               <div>
                 <p className="text-white font-medium">{viewing.userId?.name || 'Unknown'}</p>
@@ -291,7 +294,7 @@ export default function Status() {
               {(viewing.type === 'image' || viewing.type === 'image_text') && viewing.mediaUrl && (
                 <div className="relative w-full">
                   <img
-                    src={`${SOCKET_URL}${viewing.mediaUrl}`}
+                    src={getFullUrl(viewing.mediaUrl)}
                     alt="status"
                     className="w-full max-h-[500px] object-contain rounded-lg"
                   />
@@ -305,7 +308,7 @@ export default function Status() {
               {(viewing.type === 'video' || viewing.type === 'video_text') && viewing.mediaUrl && (
                 <div className="relative w-full">
                   <video
-                    src={`${SOCKET_URL}${viewing.mediaUrl}`}
+                    src={getFullUrl(viewing.mediaUrl)}
                     controls
                     autoPlay
                     className="w-full max-h-[500px] object-contain rounded-lg"
@@ -319,7 +322,6 @@ export default function Status() {
               )}
             </div>
 
-            {/* View count – shown only when viewing status */}
             {viewing.viewedBy && viewing.viewedBy.length > 0 && (
               <div className="text-center text-gray-400 text-sm mt-3">
                 Viewed by {viewing.viewedBy.length} people
@@ -365,7 +367,6 @@ export default function Status() {
               )}
             </div>
 
-            {/* Viewers List (only for owner) */}
             {isMyStatus(viewing) && showViewers && (
               <div className="mt-4 bg-[#202c33] rounded-lg p-4 max-h-48 overflow-y-auto">
                 <h3 className="text-white font-medium mb-2">Viewed by ({getViewers(viewing).length})</h3>
@@ -374,8 +375,16 @@ export default function Status() {
                 )}
                 {getViewers(viewing).map((viewer) => (
                   <div key={viewer._id} className="flex items-center gap-3 py-2 border-b border-black/10 last:border-0">
-                    <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-xs">
-                      {viewer.name?.[0]?.toUpperCase() || '?'}
+                    <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-xs overflow-hidden">
+                      {viewer.profilePic ? (
+                        <img
+                          src={getFullUrl(viewer.profilePic)}
+                          alt={viewer.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        viewer.name?.[0]?.toUpperCase() || '?'
+                      )}
                     </div>
                     <p className="text-white text-sm">{viewer.name || viewer.phoneNumber}</p>
                   </div>
@@ -386,7 +395,6 @@ export default function Status() {
         </div>
       )}
 
-      {/* ===== CREATE STATUS MODAL ===== */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
           <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[90vh] overflow-y-auto">
