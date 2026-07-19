@@ -36,7 +36,7 @@ export default function GroupChat() {
   const audioRefs = useRef({});
   const sendingRef = useRef(false);
 
-  // Voice recording states
+  // ---- Voice recording states (EXACT same as ChatWindow) ----
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -122,8 +122,7 @@ export default function GroupChat() {
     socket.emit('send_group_message', data, (response) => {
       sendingRef.current = false;
       if (response?.success) {
-        // ✅ Don't add message here – it will come via socket broadcast
-        // Just clear replyTo
+        // Don't add message locally – broadcast will handle it
         setReplyTo(null);
         scrollToBottom();
       } else {
@@ -166,7 +165,7 @@ export default function GroupChat() {
     }
   };
 
-  // ---- Voice Recording ----
+  // ---- Voice Recording (EXACT same as ChatWindow) ----
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -222,20 +221,54 @@ export default function GroupChat() {
     }
   };
 
+  // ---- Send voice message (EXACT same as ChatWindow) ----
   const sendVoiceMessage = async () => {
-    if (!audioBlob) return;
+    if (!audioBlob) {
+      console.error('❌ No audio blob to send');
+      return;
+    }
+
+    if (audioBlob.size === 0) {
+      console.error('❌ Audio blob is empty');
+      alert('Recording was empty. Please try again.');
+      return;
+    }
+
     setUploading(true);
     try {
       const duration = recordingTime;
-      const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      const file = new File([audioBlob], `voice_${Date.now()}.webm`, {
+        type: 'audio/webm',
+      });
+
+      console.log('📤 Uploading voice file:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+
       const formData = new FormData();
       formData.append('media', file);
-      const res = await api.post('/messages/upload', formData);
-      sendMessage({ mediaUrl: res.data.mediaUrl, messageType: 'audio', content: '', duration });
+
+      const res = await api.post('/messages/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      console.log('✅ Voice uploaded:', res.data);
+      sendMessage({
+        mediaUrl: res.data.mediaUrl,
+        messageType: 'audio',
+        content: '',
+        duration,
+      });
+
       setAudioBlob(null);
       setAudioURL('');
+      setRecordingTime(0);
     } catch (err) {
-      console.error('Voice upload failed', err);
+      console.error('❌ Voice upload failed:', err);
+      console.error('📋 Response data:', err.response?.data);
+      alert('Failed to send voice message. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -276,7 +309,7 @@ export default function GroupChat() {
   };
 
   const handleDelete = (msg, deleteFor) => {
-    // For now, filter locally
+    // For now, just filter locally (you can later add socket delete)
     setMessages(prev => prev.filter(m => m._id !== msg._id));
     setShowMessageMenu(null);
   };
@@ -390,11 +423,12 @@ export default function GroupChat() {
                   <div className={`rounded-lg px-3 py-2 text-sm shadow ${
                     isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
                   }`}>
+                    {/* Image */}
                     {m.messageType === 'image' && m.mediaUrl && (
                       <div className="relative group/image">
                         <img
                           src={`${SOCKET_URL}${m.mediaUrl}`}
-                          alt="image"
+                          alt="shared"
                           className="rounded-md mb-1 max-h-64 object-cover"
                         />
                         <button
@@ -406,6 +440,8 @@ export default function GroupChat() {
                         </button>
                       </div>
                     )}
+
+                    {/* Video */}
                     {m.messageType === 'video' && m.mediaUrl && (
                       <div className="relative group/video">
                         <video src={`${SOCKET_URL}${m.mediaUrl}`} controls className="rounded-md mb-1 max-h-64" />
@@ -418,6 +454,20 @@ export default function GroupChat() {
                         </button>
                       </div>
                     )}
+
+                    {/* File */}
+                    {m.messageType === 'file' && m.mediaUrl && (
+                      <a
+                        href={`${SOCKET_URL}${m.mediaUrl}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline block mb-1"
+                      >
+                        📄 Download file
+                      </a>
+                    )}
+
+                    {/* Voice Message */}
                     {m.messageType === 'audio' && m.mediaUrl && (
                       <div className="flex items-center gap-3 min-w-[160px]">
                         <button
@@ -445,20 +495,12 @@ export default function GroupChat() {
                             if (bar) bar.style.width = `${progress}%`;
                           }}
                           onEnded={() => setAudioPlaying(null)}
+                          onError={() => console.error('Audio load error for message:', m._id)}
                           className="hidden"
                         />
                       </div>
                     )}
-                    {m.messageType === 'file' && m.mediaUrl && (
-                      <a
-                        href={`${SOCKET_URL}${m.mediaUrl}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="underline block mb-1"
-                      >
-                        📄 Download file
-                      </a>
-                    )}
+
                     {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
 
                     <div className="flex items-center justify-end gap-1 mt-1">
@@ -510,7 +552,7 @@ export default function GroupChat() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input Area */}
+        {/* Input Area (EXACT same as ChatWindow) */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
