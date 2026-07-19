@@ -56,20 +56,70 @@ router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// UPLOAD MEDIA
+// UPLOAD MEDIA (Image, Video, Audio, File)
 // ============================================
-router.post('/upload', authMiddleware, upload.single('media'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ message: 'No file uploaded' });
+router.post('/upload', authMiddleware, (req, res) => {
+  console.log('📥 Upload request received');
+  console.log('📋 Content-Type:', req.headers['content-type']);
+  console.log('📋 User ID:', req.userId);
+
+  upload.single('media')(req, res, async (err) => {
+    // Handle multer errors
+    if (err) {
+      console.error('❌ Multer error:', err);
+      console.error('📋 Error details:', err.message);
+      return res.status(400).json({
+        success: false,
+        message: err.message || 'File upload failed',
+      });
     }
-    const mediaUrl = `/uploads/${req.file.filename}`;
-    console.log(`📁 File uploaded: ${mediaUrl}`);
-    res.json({ mediaUrl });
-  } catch (err) {
-    console.error('❌ Upload error:', err.message);
-    res.status(500).json({ message: 'Server error during upload' });
-  }
+
+    try {
+      // Check if file was uploaded
+      if (!req.file) {
+        console.error('❌ No file uploaded');
+        return res.status(400).json({
+          success: false,
+          message: 'No file uploaded',
+        });
+      }
+
+      // Check file size
+      if (req.file.size === 0) {
+        console.error('❌ File is empty');
+        return res.status(400).json({
+          success: false,
+          message: 'File is empty',
+        });
+      }
+
+      // Log file details
+      console.log('📁 File uploaded successfully:');
+      console.log('📋 Filename:', req.file.filename);
+      console.log('📋 Original name:', req.file.originalname);
+      console.log('📋 Size:', req.file.size, 'bytes');
+      console.log('📋 MIME type:', req.file.mimetype);
+
+      const mediaUrl = `/uploads/${req.file.filename}`;
+      console.log('📋 Media URL:', mediaUrl);
+
+      res.json({
+        success: true,
+        mediaUrl: mediaUrl,
+        filename: req.file.filename,
+        size: req.file.size,
+        mimetype: req.file.mimetype,
+      });
+
+    } catch (error) {
+      console.error('❌ Upload error:', error.message);
+      res.status(500).json({
+        success: false,
+        message: 'Server error during upload',
+        error: error.message,
+      });
+    }
+  });
 });
 
 // ============================================
