@@ -18,6 +18,7 @@ export function SocketProvider({ children }) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      setOnlineUsers({});
       return;
     }
 
@@ -50,11 +51,24 @@ export function SocketProvider({ children }) {
       setConnected(false);
     });
 
+    // ---- ONLINE USERS LIST (initial state) ----
+    socket.on('online_users', ({ users }) => {
+      console.log('📋 Online users list:', users);
+      const onlineMap = {};
+      users.forEach(uid => {
+        onlineMap[uid] = true;
+      });
+      setOnlineUsers(onlineMap);
+    });
+
+    // ---- USER ONLINE / OFFLINE updates ----
     socket.on('user_online', ({ userId }) => {
+      console.log(`🟢 User online: ${userId}`);
       setOnlineUsers((prev) => ({ ...prev, [userId]: true }));
     });
 
     socket.on('user_offline', ({ userId }) => {
+      console.log(`🔴 User offline: ${userId}`);
       setOnlineUsers((prev) => {
         const next = { ...prev };
         delete next[userId];
@@ -62,6 +76,7 @@ export function SocketProvider({ children }) {
       });
     });
 
+    // ---- CALLS ----
     socket.on('call_offer', ({ from, offer, callType, callerName }) => {
       setIncomingCall({ from, offer, callType, callerName });
     });

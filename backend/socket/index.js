@@ -14,9 +14,7 @@ function initSocket(io) {
 
     let currentUserId = null;
 
-    // ============================================
-    // JOIN - User online
-    // ============================================
+    // ---- JOIN ----
     socket.on('join', async (userId) => {
       if (!userId) {
         console.log('❌ Join event: No userId provided');
@@ -35,12 +33,18 @@ function initSocket(io) {
         console.error('❌ Failed to update onlineStatus:', err.message);
       }
 
+      // ✅ Send current online users list to the newly joined user
+      const onlineUserIds = Object.keys(userSocketMap);
+      console.log(`📋 Sending online users list to ${userId}:`, onlineUserIds);
+
+      // ✅ Send to self – list of all online users
+      socket.emit('online_users', { users: onlineUserIds });
+
+      // ✅ Broadcast to ALL users (including self) that this user is online
       io.emit('user_online', { userId });
     });
 
-    // ============================================
-    // PRIVATE MESSAGE
-    // ============================================
+    // ---- PRIVATE MESSAGE ----
     socket.on('send_message', async (data, ack) => {
       try {
         const {
@@ -98,9 +102,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // GROUP MESSAGE
-    // ============================================
+    // ---- GROUP MESSAGE ----
     socket.on('send_group_message', async (data, ack) => {
       try {
         const {
@@ -143,7 +145,6 @@ function initSocket(io) {
 
         console.log(`✅ Group message saved: ${message._id}`);
 
-        // Broadcast to all members
         const memberIds = group.members.map((m) => m.user.toString());
         for (const uid of memberIds) {
           const socketId = getSocketId(uid);
@@ -161,9 +162,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // TYPING INDICATOR
-    // ============================================
+    // ---- TYPING INDICATOR ----
     socket.on('typing', ({ to, from }) => {
       const targetSocketId = getSocketId(to);
       if (targetSocketId) {
@@ -178,9 +177,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // READ RECEIPTS
-    // ============================================
+    // ---- READ RECEIPTS ----
     socket.on('mark_read', async ({ senderId, receiverId }) => {
       try {
         console.log(`📖 Marking messages as read from ${senderId} to ${receiverId}`);
@@ -201,9 +198,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // DELETE MESSAGE
-    // ============================================
+    // ---- DELETE MESSAGE ----
     socket.on('delete_message', async ({ messageId, deleteFor, senderId, receiverId }) => {
       try {
         console.log(`🗑️ Deleting message ${messageId} for ${deleteFor}`);
@@ -238,9 +233,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // WEBRTC CALL SIGNALING
-    // ============================================
+    // ---- WEBRTC CALL SIGNALING ----
     socket.on('call_offer', ({ to, from, offer, callType, callerName }) => {
       console.log(`📞 Call offer from ${from} to ${to} (${callType})`);
       const targetSocketId = getSocketId(to);
@@ -281,9 +274,7 @@ function initSocket(io) {
       }
     });
 
-    // ============================================
-    // DISCONNECT
-    // ============================================
+    // ---- DISCONNECT ----
     socket.on('disconnect', async () => {
       console.log(`❌ Socket disconnected: ${socket.id}`);
 
@@ -296,6 +287,8 @@ function initSocket(io) {
             lastSeen: new Date(),
           });
           console.log(`👤 ${currentUserId} is now offline`);
+
+          // ✅ Broadcast to all users that this user is offline
           io.emit('user_offline', { userId: currentUserId });
         } catch (err) {
           console.error('❌ Failed to update offline status:', err.message);
