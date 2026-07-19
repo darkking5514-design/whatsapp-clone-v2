@@ -14,6 +14,7 @@ function initSocket(io) {
 
     let currentUserId = null;
 
+    // ---- JOIN ----
     socket.on('join', async (userId) => {
       if (!userId) return;
       console.log(`👤 User ${userId} joined`);
@@ -29,7 +30,7 @@ function initSocket(io) {
       io.emit('user_online', { userId });
     });
 
-    // ---- Private message ----
+    // ---- PRIVATE MESSAGE ----
     socket.on('send_message', async (data, ack) => {
       try {
         const {
@@ -66,21 +67,28 @@ function initSocket(io) {
         });
         await message.save();
 
+        // Populate sender details
         const populated = await Message.findById(message._id).populate('sender', 'name phoneNumber');
+
+        // Send to receiver if online
         const receiverSocketId = getSocketId(receiverId);
         if (receiverSocketId) {
           message.status = 'delivered';
           await message.save();
           io.to(receiverSocketId).emit('receive_message', populated);
         }
-        if (ack) ack({ success: true, message: populated });
+
+        // Acknowledge sender
+        if (typeof ack === 'function') {
+          ack({ success: true, message: populated });
+        }
       } catch (err) {
         console.error('send_message error:', err);
         if (ack) ack({ success: false, error: err.message });
       }
     });
 
-    // ---- Group message ----
+    // ---- GROUP MESSAGE ----
     socket.on('send_group_message', async (data, ack) => {
       try {
         const {
@@ -119,7 +127,7 @@ function initSocket(io) {
         const populated = await Message.findById(message._id)
           .populate('sender', 'name phoneNumber');
 
-        const memberIds = group.members.map(m => m.user.toString());
+        const memberIds = group.members.map((m) => m.user.toString());
         for (const uid of memberIds) {
           const socketId = getSocketId(uid);
           if (socketId) {
@@ -133,17 +141,22 @@ function initSocket(io) {
       }
     });
 
-    // ---- Other events (typing, read receipts, calls) ----
+    // ---- TYPING INDICATOR ----
     socket.on('typing', ({ to, from }) => {
       const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('typing', { from });
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('typing', { from });
+      }
     });
 
     socket.on('stop_typing', ({ to, from }) => {
       const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('stop_typing', { from });
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('stop_typing', { from });
+      }
     });
 
+    // ---- READ RECEIPTS ----
     socket.on('mark_read', async ({ senderId, receiverId }) => {
       try {
         await Message.updateMany(
@@ -151,40 +164,93 @@ function initSocket(io) {
           { $set: { status: 'read' } }
         );
         const senderSocketId = getSocketId(senderId);
-        if (senderSocketId) io.to(senderSocketId).emit('messages_read', { by: receiverId });
+        if (senderSocketId) {
+          io.to(senderSocketId).emit('messages_read', { by: receiverId });
+        }
       } catch (err) {
         console.error('mark_read error:', err);
       }
     });
 
-    // WebRTC signaling
-    socket.on('call_offer', ({ to, from, offer, callType, callerName }) => {
-      const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('call_offer', { from, offer, callType, callerName });
-    });
-    socket.on('call_answer', ({ to, from, answer }) => {
-      const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('call_answer', { from, answer });
-    });
-    socket.on('call_ice_candidate', ({ to, from, candidate }) => {
-      const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('call_ice_candidate', { from, candidate });
-    });
-    socket.on('call_end', ({ to, from }) => {
-      const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('call_end', { from });
-    });
-    socket.on('call_reject', ({ to, from }) => {
-      const targetSocketId = getSocketId(to);
-      if (targetSocketId) io.to(targetSocketId).emit('call_reject', { from });
+    // ---- DELETE MESSAGE ----
+    socket.on('delete_message', async ({ messageId, deleteFor, senderId, receiverId }) => {
+      try {
+        const message = await Message.findById(messageId);
+        if (!message) return;
+
+        if (deleteFor === 'everyone') {
+          message.deleted = true;
+          await message.save();
+
+          const senderSocket = getSocketId(senderId);
+          const receiverSocket = getSocketId(receiverId);
+          if (senderSocket) {
+            io.to(senderSocket).emit('message_deleted', { messageId, deleteFor: 'everyone' });
+          }
+          if (receiverSocket) {
+            io.to(receiverSocket).emit('message_deleted', { messageId, deleteFor: 'everyone' });
+          }
+        } else {
+          if (!message.deletedFor.includes(receiverId)) {
+            message.deletedFor.push(receiverId);
+            await message.save();
+          }
+          const receiverSocket = getSocketId(receiverId);
+          if (receiverSocket) {
+            io.to(receiverSocket).emit('message_deleted', { messageId, deleteFor: 'me' });
+          }
+        }
+      } catch (err) {
+        console.error('delete_message error:', err);
+      }
     });
 
+    // ---- WEBRTC CALL SIGNALING ----
+    socket.on('call_offer', ({ to, from, offer, callType, callerName }) => {
+      const targetSocketId = getSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_offer', { from, offer, callType, callerName });
+      }
+    });
+
+    socket.on('call_answer', ({ to, from, answer }) => {
+      const targetSocketId = getSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_answer', { from, answer });
+      }
+    });
+
+    socket.on('call_ice_candidate', ({ to, from, candidate }) => {
+      const targetSocketId = getSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_ice_candidate', { from, candidate });
+      }
+    });
+
+    socket.on('call_end', ({ to, from }) => {
+      const targetSocketId = getSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_end', { from });
+      }
+    });
+
+    socket.on('call_reject', ({ to, from }) => {
+      const targetSocketId = getSocketId(to);
+      if (targetSocketId) {
+        io.to(targetSocketId).emit('call_reject', { from });
+      }
+    });
+
+    // ---- DISCONNECT ----
     socket.on('disconnect', async () => {
       console.log(`❌ Socket disconnected: ${socket.id}`);
       if (currentUserId && userSocketMap[currentUserId] === socket.id) {
         delete userSocketMap[currentUserId];
         try {
-          await User.findByIdAndUpdate(currentUserId, { onlineStatus: false, lastSeen: new Date() });
+          await User.findByIdAndUpdate(currentUserId, {
+            onlineStatus: false,
+            lastSeen: new Date(),
+          });
           io.emit('user_offline', { userId: currentUserId });
         } catch (err) {
           console.error('Failed to update offline status', err);

@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { 
-  ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video, 
-  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
+import {
+  ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video,
+  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause, Info
 } from 'lucide-react';
 import api, { SOCKET_URL } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -32,7 +32,7 @@ export default function ChatWindow() {
   const fileInputRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // Voice recording
+  // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -105,24 +105,45 @@ export default function ChatWindow() {
     if (!socket || !connected) return;
 
     const onReceiveMessage = (message) => {
-      if (message.sender === user.id) return;
-      if (message.sender === otherUserId || message.receiver === otherUserId) {
+      console.log('📩 Received message:', message);
+      
+      // Get sender ID (handle populated sender object)
+      const senderId = message.sender?._id || message.sender;
+      const receiverId = message.receiver?._id || message.receiver;
+
+      // Check if message belongs to this chat
+      if (senderId === otherUserId || receiverId === otherUserId) {
         setMessages((prev) => [...prev, message]);
-        if (message.sender === otherUserId) {
-          socket.emit('mark_read', { senderId: otherUserId, receiverId: user.id });
+
+        // Mark as read if message is from other user
+        if (senderId === otherUserId) {
+          socket.emit('mark_read', {
+            senderId: otherUserId,
+            receiverId: user.id,
+          });
         }
       }
     };
 
-    const onTyping = ({ from }) => { if (from === otherUserId) setIsTyping(true); };
-    const onStopTyping = ({ from }) => { if (from === otherUserId) setIsTyping(false); };
+    const onTyping = ({ from }) => {
+      if (from === otherUserId) setIsTyping(true);
+    };
+
+    const onStopTyping = ({ from }) => {
+      if (from === otherUserId) setIsTyping(false);
+    };
+
     const onMessagesRead = ({ by }) => {
       if (by === otherUserId) {
         setMessages((prev) =>
-          prev.map((m) => (m.sender === user.id ? { ...m, status: 'read' } : m))
+          prev.map((m) => {
+            const senderId = m.sender?._id || m.sender;
+            return senderId === user.id ? { ...m, status: 'read' } : m;
+          })
         );
       }
     };
+
     const onMessageDeleted = ({ messageId, deleteFor }) => {
       if (deleteFor === 'everyone') {
         setMessages((prev) =>
@@ -166,7 +187,7 @@ export default function ChatWindow() {
     }, 1500);
   };
 
-  // ---- Send message (with statusReply support) ----
+  // ---- Send message ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
@@ -254,7 +275,7 @@ export default function ChatWindow() {
         setAudioBlob(blob);
         const url = URL.createObjectURL(blob);
         setAudioURL(url);
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       mediaRecorder.start();
@@ -262,7 +283,7 @@ export default function ChatWindow() {
       setRecordingTime(0);
       recordingStartRef.current = Date.now();
       recordingTimerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
+        setRecordingTime((prev) => prev + 1);
       }, 1000);
     } catch (err) {
       console.error('Could not access microphone:', err);
@@ -301,9 +322,7 @@ export default function ChatWindow() {
       const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
       const formData = new FormData();
       formData.append('media', file);
-      const res = await api.post('/messages/upload', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post('/messages/upload', formData);
       sendMessage({ mediaUrl: res.data.mediaUrl, messageType: 'audio', content: '', duration });
       setAudioBlob(null);
       setAudioURL('');
@@ -365,14 +384,16 @@ export default function ChatWindow() {
     api.delete(`/messages/${message._id}?deleteFor=${deleteFor}`)
       .then(() => {
         if (deleteFor === 'everyone') {
-          setMessages(prev => prev.map(m =>
-            m._id === message._id ? { ...m, deleted: true } : m
-          ));
+          setMessages((prev) =>
+            prev.map((m) =>
+              m._id === message._id ? { ...m, deleted: true } : m
+            )
+          );
         } else {
-          setMessages(prev => prev.filter(m => m._id !== message._id));
+          setMessages((prev) => prev.filter((m) => m._id !== message._id));
         }
       })
-      .catch(err => console.error('Delete error:', err));
+      .catch((err) => console.error('Delete error:', err));
     setShowMessageMenu(null);
   };
 
@@ -408,7 +429,7 @@ export default function ChatWindow() {
       </div>
 
       <div className="flex flex-col h-full w-full bg-whatsapp-chatbg relative min-h-0">
-        {/* ===== HEADER (sticky) ===== */}
+        {/* Header */}
         <div className="sticky top-0 z-20 bg-[#202c33] px-2 py-2 md:px-4 md:py-3 flex items-center justify-between gap-2 min-h-[56px] border-b border-[#2f3b41] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1">
             <button onClick={() => navigate('/chats')} className="text-gray-300 md:hidden p-1">
@@ -436,16 +457,17 @@ export default function ChatWindow() {
           </div>
         </div>
 
-        {/* ===== REPLY PREVIEW ===== */}
+        {/* Reply Preview */}
         {replyTo && (
           <div className="bg-[#2a3942] px-3 py-2 flex items-center justify-between border-b border-[#3b4a54] flex-shrink-0">
             <div className="flex-1">
               <p className="text-xs text-whatsapp-green font-medium">
-                {replyTo.isStatusReply ? `Replying to ${replyTo.username}'s status` : 
-                  `Replying to ${replyTo.sender === user.id ? 'yourself' : otherUser?.name}`}
+                {replyTo.isStatusReply
+                  ? `Replying to ${replyTo.username}'s status`
+                  : `Replying to ${replyTo.sender === user.id ? 'yourself' : otherUser?.name}`}
               </p>
               <p className="text-sm text-gray-300 truncate max-w-[200px]">
-                {replyTo.isStatusReply ? (replyTo.content || 'Status') : 
+                {replyTo.isStatusReply ? (replyTo.content || 'Status') :
                   (replyTo.messageType === 'text' ? replyTo.content : '📎 Media')}
               </p>
             </div>
@@ -455,7 +477,7 @@ export default function ChatWindow() {
           </div>
         )}
 
-        {/* ===== MESSAGES ===== */}
+        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-3 md:px-10 py-4 space-y-2">
           {messages.length === 0 && (
             <p className="text-gray-400 text-center mt-10 text-sm">No messages yet. Say hello! 👋</p>
@@ -468,15 +490,21 @@ export default function ChatWindow() {
                 </div>
               );
             }
-            const isSent = m.sender === user.id;
+
+            // Handle populated sender object
+            const senderId = m.sender?._id || m.sender;
+            const isSent = senderId === user.id;
             const isReply = m.replyTo;
             const isForwarded = m.forwarded;
-            const replyMessage = isReply ? messages.find(msg => msg._id === m.replyTo) : null;
+            const replyMessage = isReply ? messages.find((msg) => msg._id === m.replyTo) : null;
+
+            // Skip if not for this chat
+            if (senderId !== user.id && senderId !== otherUserId) return null;
 
             return (
               <div key={m._id} className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}>
                 <div className="relative max-w-[75%]">
-                  {/* ---- Status Reply Quote ---- */}
+                  {/* Status Reply Quote */}
                   {m.statusReply && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-300">
                       <p className="font-medium text-whatsapp-green">
@@ -485,16 +513,12 @@ export default function ChatWindow() {
                       {m.statusReply.type === 'text' && (
                         <p className="truncate max-w-[200px]">{m.statusReply.text}</p>
                       )}
-                      {m.statusReply.type === 'image' && (
-                        <p className="truncate max-w-[200px]">📷 Photo</p>
-                      )}
-                      {m.statusReply.type === 'video' && (
-                        <p className="truncate max-w-[200px]">🎥 Video</p>
-                      )}
+                      {m.statusReply.type === 'image' && <p className="truncate max-w-[200px]">📷 Photo</p>}
+                      {m.statusReply.type === 'video' && <p className="truncate max-w-[200px]">🎥 Video</p>}
                     </div>
                   )}
 
-                  {/* ---- Regular Reply Preview ---- */}
+                  {/* Regular Reply Preview */}
                   {isReply && replyMessage && !replyMessage.deleted && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-400">
                       <p className="font-medium text-whatsapp-green">
@@ -515,7 +539,7 @@ export default function ChatWindow() {
                       isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
                     }`}
                   >
-                    {/* Image, Video, File */}
+                    {/* Image */}
                     {m.messageType === 'image' && m.mediaUrl && (
                       <div className="relative group/image">
                         <img
@@ -532,6 +556,8 @@ export default function ChatWindow() {
                         </button>
                       </div>
                     )}
+
+                    {/* Video */}
                     {m.messageType === 'video' && m.mediaUrl && (
                       <div className="relative group/video">
                         <video src={`${SOCKET_URL}${m.mediaUrl}`} controls className="rounded-md mb-1 max-h-64" />
@@ -544,6 +570,8 @@ export default function ChatWindow() {
                         </button>
                       </div>
                     )}
+
+                    {/* File */}
                     {m.messageType === 'file' && m.mediaUrl && (
                       <a
                         href={`${SOCKET_URL}${m.mediaUrl}`}
@@ -590,6 +618,7 @@ export default function ChatWindow() {
                     )}
 
                     {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-300">
                         {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -598,7 +627,7 @@ export default function ChatWindow() {
                     </div>
                   </div>
 
-                  {/* ===== MESSAGE MENU ===== */}
+                  {/* Message Menu */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
                     className="absolute -top-2 -right-2 p-1 bg-[#202c33] rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
@@ -637,7 +666,7 @@ export default function ChatWindow() {
           <div ref={bottomRef} />
         </div>
 
-        {/* ===== INPUT AREA ===== */}
+        {/* Input Area */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
@@ -647,7 +676,6 @@ export default function ChatWindow() {
             accept="image/*,video/*,audio/*"
           />
           <button
-            type="button"
             onClick={() => fileInputRef.current?.click()}
             className="text-gray-300 p-2 hover:text-white transition-colors"
             disabled={uploading}
@@ -657,10 +685,8 @@ export default function ChatWindow() {
 
           {!isRecording && !audioURL && (
             <button
-              type="button"
               onClick={startRecording}
               className="text-gray-300 p-2 hover:text-white transition-colors"
-              title="Voice message"
             >
               <Mic size={20} />
             </button>
@@ -669,7 +695,10 @@ export default function ChatWindow() {
           {isRecording && (
             <div className="flex items-center gap-2 bg-[#2a3942] rounded-full px-3 py-1 flex-1">
               <span className="text-red-400 animate-pulse text-sm">● Recording</span>
-              <span className="text-white text-sm font-mono">{String(Math.floor(recordingTime / 60)).padStart(2, '0')}:{String(recordingTime % 60).padStart(2, '0')}</span>
+              <span className="text-white text-sm font-mono">
+                {String(Math.floor(recordingTime / 60)).padStart(2, '0')}:
+                {String(recordingTime % 60).padStart(2, '0')}
+              </span>
               <button onClick={cancelRecording} className="text-red-400 hover:text-red-300 p-1">
                 <X size={18} />
               </button>
@@ -681,7 +710,14 @@ export default function ChatWindow() {
 
           {audioURL && !isRecording && (
             <div className="flex items-center gap-2 bg-[#2a3942] rounded-full px-3 py-1 flex-1">
-              <button onClick={() => { const audio = document.getElementById('voice-preview'); if (audio.paused) audio.play(); else audio.pause(); }} className="text-white p-1">
+              <button
+                onClick={() => {
+                  const audio = document.getElementById('voice-preview');
+                  if (audio.paused) audio.play();
+                  else audio.pause();
+                }}
+                className="text-white p-1"
+              >
                 <Play size={18} />
               </button>
               <audio id="voice-preview" src={audioURL} className="hidden" />
@@ -707,7 +743,6 @@ export default function ChatWindow() {
 
           {!isRecording && !audioURL && text.trim() && (
             <button
-              type="submit"
               onClick={handleSend}
               className="bg-whatsapp-green text-black rounded-full p-2 hover:opacity-90 transition-opacity"
             >
@@ -723,57 +758,44 @@ export default function ChatWindow() {
           <div className="bg-[#202c33] rounded-lg p-4 max-w-md w-full max-h-[80vh]">
             <div className="flex justify-between items-center mb-3">
               <h2 className="text-white font-medium">Forward to...</h2>
-              <button onClick={() => { setShowForwardModal(false); setForwardMessage(null); }} className="text-gray-400 hover:text-white">
+              <button
+                onClick={() => {
+                  setShowForwardModal(false);
+                  setForwardMessage(null);
+                }}
+                className="text-gray-400 hover:text-white"
+              >
                 <X size={20} />
               </button>
             </div>
             <div className="max-h-[300px] overflow-y-auto space-y-2">
-              {users.filter(u => u._id !== user.id).map((u) => (
-                <button
-                  key={u._id}
-                  onClick={() => {
-                    setSelectedUsers(prev =>
-                      prev.includes(u._id) ? prev.filter(id => id !== u._id) : [...prev, u._id]
-                    );
-                  }}
-                  className={`w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#2a3942] transition-colors ${
-                    selectedUsers.includes(u._id) ? 'bg-[#2a3942] border border-whatsapp-green' : ''
-                  }`}
-                >
-                  <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-sm">
-                    {u.name?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <p className="text-white text-sm">{u.name || u.phoneNumber}</p>
-                </button>
-              ))}
+              {users
+                .filter((u) => u._id !== user.id)
+                .map((u) => (
+                  <button
+                    key={u._id}
+                    onClick={() => {
+                      socket.emit('send_message', {
+                        senderId: user.id,
+                        receiverId: u._id,
+                        content: forwardMessage.content || '',
+                        mediaUrl: forwardMessage.mediaUrl || '',
+                        messageType: forwardMessage.messageType || 'text',
+                        forwarded: true,
+                        originalSender: forwardMessage.sender,
+                      });
+                      setShowForwardModal(false);
+                      setForwardMessage(null);
+                    }}
+                    className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-[#2a3942]"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-sm">
+                      {u.name?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <p className="text-white text-sm">{u.name}</p>
+                  </button>
+                ))}
             </div>
-            <button
-              onClick={() => {
-                if (!forwardMessage || selectedUsers.length === 0) return;
-                selectedUsers.forEach((userId) => {
-                  socket.emit('send_message', {
-                    senderId: user.id,
-                    receiverId: userId,
-                    content: forwardMessage.content || '',
-                    mediaUrl: forwardMessage.mediaUrl || '',
-                    messageType: forwardMessage.messageType || 'text',
-                    forwarded: true,
-                    originalSender: forwardMessage.sender,
-                  });
-                });
-                api.post('/messages/forward', {
-                  messageId: forwardMessage._id,
-                  receiverIds: selectedUsers,
-                }).catch(err => console.error('Forward error:', err));
-                setShowForwardModal(false);
-                setForwardMessage(null);
-                setSelectedUsers([]);
-              }}
-              disabled={selectedUsers.length === 0}
-              className="w-full mt-3 bg-whatsapp-green text-black font-medium rounded-md py-2 disabled:opacity-50"
-            >
-              Send ({selectedUsers.length})
-            </button>
           </div>
         </div>
       )}
