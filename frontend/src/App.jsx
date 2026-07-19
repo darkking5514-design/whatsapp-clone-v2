@@ -8,7 +8,7 @@ import Status from './pages/Status';
 import Calls from './pages/Calls';
 import Call from './pages/Call';
 import AddFriends from './pages/AddFriends';
-import Settings from './pages/Settings'; // 👈 New Settings page
+import Settings from './pages/Settings'; // 👈 IMPORT Settings
 import ProtectedRoute from './components/ProtectedRoute';
 import IncomingCallBanner from './components/IncomingCallBanner';
 import MobileNav from './components/MobileNav';
@@ -79,6 +79,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
+
+        {/* 👇 YEH ROUTE ADD KAREIN */}
         <Route
           path="/settings"
           element={
