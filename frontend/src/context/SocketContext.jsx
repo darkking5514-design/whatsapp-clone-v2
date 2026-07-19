@@ -14,7 +14,6 @@ export function SocketProvider({ children }) {
 
   useEffect(() => {
     if (!user) {
-      console.log('⚠️ No user - disconnecting');
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
@@ -24,7 +23,6 @@ export function SocketProvider({ children }) {
 
     console.log(`🔌 Connecting to: ${SOCKET_URL}`);
 
-    // Use polling first, then upgrade to websocket
     const socket = io(SOCKET_URL, {
       transports: ['polling', 'websocket'],
       withCredentials: true,
@@ -68,13 +66,8 @@ export function SocketProvider({ children }) {
       setIncomingCall({ from, offer, callType, callerName });
     });
 
-    socket.on('call_end', () => {
-      setIncomingCall(null);
-    });
-
-    socket.on('call_reject', () => {
-      setIncomingCall(null);
-    });
+    socket.on('call_end', () => setIncomingCall(null));
+    socket.on('call_reject', () => setIncomingCall(null));
 
     return () => {
       socket.disconnect();
