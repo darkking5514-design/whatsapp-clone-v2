@@ -1,5 +1,5 @@
 // ============================================
-// SERVER.JS – COMPLETE BACKEND (FIXED)
+// SERVER.JS – COMPLETE BACKEND
 // ============================================
 
 // Load environment variables
@@ -30,6 +30,7 @@ const chatRoutes = require('./routes/chat');
 const friendRoutes = require('./routes/friends');
 const callRoutes = require('./routes/calls');
 const groupRoutes = require('./routes/groups');
+const profileRoutes = require('./routes/profile'); // 👈 New profile routes
 
 // ---- Socket ----
 const { initSocket } = require('./socket/index');
@@ -73,6 +74,7 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/friends', friendRoutes);
 app.use('/api/calls', callRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/profile', profileRoutes); // 👈 Profile routes
 
 // ---- Health Check ----
 app.get('/api/health', (req, res) => {
@@ -108,6 +110,9 @@ const io = new Server(server, {
 
 initSocket(io);
 console.log('✅ Socket.IO initialized');
+
+// ---- Pass io to app for routes ----
+app.set('io', io);
 
 // ---- MongoDB Connection ----
 console.log('🔍 Connecting to MongoDB...');
