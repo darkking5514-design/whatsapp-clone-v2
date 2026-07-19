@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, UserPlus, Check, X, UserMinus } from 'lucide-react';
+import { Search, UserPlus, Check, X, UserMinus, MessageCircle } from 'lucide-react';
 import api from '../api/axios';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
+import { useSocket } from '../context/SocketContext';
 
 export default function AddFriends() {
   const { user } = useAuth();
+  const { onlineUsers } = useSocket();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
@@ -14,13 +16,10 @@ export default function AddFriends() {
   const [pendingRequests, setPendingRequests] = useState([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [searching, setSearching] = useState(false);
 
-  // Load friends and pending requests
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  async function loadData() {
+  // ---- Load friends and pending requests ----
+  const loadData = async () => {
     try {
       const [friendsRes, pendingRes] = await Promise.all([
         api.get('/friends'),
@@ -31,45 +30,54 @@ export default function AddFriends() {
     } catch (err) {
       console.error('Load data error:', err);
     }
-  }
+  };
 
-  // Search users
-  async function handleSearch(e) {
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  // ---- Search users ----
+  const handleSearch = async (e) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    if (!searchQuery.trim()) {
+      setMessage('Please enter a name or phone number');
+      return;
+    }
 
-    setLoading(true);
+    setSearching(true);
     setMessage('');
     try {
       const res = await api.get(`/friends/search?q=${searchQuery}`);
-      setSearchResults(res.data);
-      if (res.data.length === 0) {
-        setMessage('❌ No users found');
+      // Filter out current user and existing friends
+      const filtered = res.data.filter(u => u._id !== user.id);
+      setSearchResults(filtered);
+      if (filtered.length === 0) {
+        setMessage('No users found');
       }
     } catch (err) {
       console.error('Search error:', err);
-      setMessage('❌ Search failed');
+      setMessage('Search failed. Please try again.');
     } finally {
-      setLoading(false);
+      setSearching(false);
     }
-  }
+  };
 
-  // Send friend request
-  async function sendRequest(friendId, username) {
+  // ---- Send friend request ----
+  const sendRequest = async (friendId, username) => {
     setMessage('');
     try {
       await api.post('/friends/request', { friendId });
       setMessage(`✅ Friend request sent to ${username}!`);
       await loadData();
-      setSearchResults([]);
-      setSearchQuery('');
+      // Remove from search results
+      setSearchResults(prev => prev.filter(u => u._id !== friendId));
     } catch (err) {
       setMessage(`❌ ${err.response?.data?.message || 'Request failed'}`);
     }
-  }
+  };
 
-  // Accept friend request
-  async function acceptRequest(requestId, username) {
+  // ---- Accept friend request ----
+  const acceptRequest = async (requestId, username) => {
     try {
       await api.put(`/friends/accept/${requestId}`);
       setMessage(`✅ ${username} is now your friend!`);
@@ -77,10 +85,10 @@ export default function AddFriends() {
     } catch (err) {
       setMessage('❌ Failed to accept request');
     }
-  }
+  };
 
-  // Reject friend request
-  async function rejectRequest(requestId, username) {
+  // ---- Reject friend request ----
+  const rejectRequest = async (requestId, username) => {
     try {
       await api.delete(`/friends/reject/${requestId}`);
       setMessage(`❌ Rejected request from ${username}`);
@@ -88,10 +96,10 @@ export default function AddFriends() {
     } catch (err) {
       setMessage('❌ Failed to reject request');
     }
-  }
+  };
 
-  // Remove friend
-  async function removeFriend(friendId, username) {
+  // ---- Remove friend ----
+  const removeFriend = async (friendId, username) => {
     if (!confirm(`Remove ${username} from your friends?`)) return;
     try {
       await api.delete(`/friends/remove/${friendId}`);
@@ -100,29 +108,44 @@ export default function AddFriends() {
     } catch (err) {
       setMessage('❌ Failed to remove friend');
     }
-  }
+  };
 
-  // Check if user is already friend
-  function isFriend(userId) {
+  // ---- Check if user is already friend ----
+  const isFriend = (userId) => {
     return friends.some((f) => f._id === userId);
-  }
+  };
 
-  // Check if request already sent
-  function hasPendingRequest(userId) {
+  // ---- Check if request already sent ----
+  const hasPendingRequest = (userId) => {
     return pendingRequests.some(
       (p) => p.userId?._id === userId || p.userId === userId
     );
-  }
+  };
 
-  // Navigate to chat
-  function openChat(friendId) {
+  // ---- Check if request is pending from this user ----
+  const isPendingFrom = (userId) => {
+    return pendingRequests.some(
+      (p) => p.friendId?._id === userId || p.friendId === userId
+    );
+  };
+
+  // ---- Navigate to chat ----
+  const openChat = (friendId) => {
     navigate(`/chat/${friendId}`);
-  }
+  };
+
+  // ---- Get request status for a user ----
+  const getRequestStatus = (userId) => {
+    if (isFriend(userId)) return 'friend';
+    if (hasPendingRequest(userId)) return 'pending_sent';
+    if (isPendingFrom(userId)) return 'pending_received';
+    return 'none';
+  };
 
   return (
     <div className="flex h-screen bg-[#111b21]">
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
         <div className="bg-[#202c33] px-4 py-3">
@@ -131,7 +154,11 @@ export default function AddFriends() {
 
         {/* Message */}
         {message && (
-          <div className="px-4 py-2 bg-[#2a3942] text-sm text-white">
+          <div className={`px-4 py-2 text-sm ${
+            message.includes('✅') ? 'bg-green-600/20 text-green-400' :
+            message.includes('❌') ? 'bg-red-600/20 text-red-400' :
+            'bg-[#2a3942] text-white'
+          }`}>
             {message}
           </div>
         )}
@@ -144,59 +171,70 @@ export default function AddFriends() {
               <input
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by username..."
+                placeholder="Search by name or phone number..."
                 className="bg-transparent outline-none text-sm text-white w-full placeholder-gray-500"
               />
             </div>
             <button
               type="submit"
-              disabled={loading}
+              disabled={searching}
               className="bg-whatsapp-green text-black font-medium px-4 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
             >
-              Search
+              {searching ? 'Searching...' : 'Search'}
             </button>
           </form>
         </div>
 
         {/* Search Results */}
         {searchResults.length > 0 && (
-          <div className="px-4 py-2 bg-[#1f2a30] border-b border-black/20">
-            <h2 className="text-xs text-gray-400 uppercase tracking-wider">Search Results</h2>
-            {searchResults.map((u) => (
-              <div key={u._id} className="flex items-center justify-between py-2 border-b border-black/10 last:border-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
-                    {u.username[0]?.toUpperCase() || '?'}
+          <div className="px-4 py-2 bg-[#1f2a30] border-b border-black/20 overflow-y-auto max-h-60">
+            <h2 className="text-xs text-gray-400 uppercase tracking-wider mb-2">Search Results</h2>
+            {searchResults.map((u) => {
+              const status = getRequestStatus(u._id);
+              const isOnline = !!onlineUsers[u._id];
+
+              return (
+                <div key={u._id} className="flex items-center justify-between py-2 border-b border-black/10 last:border-0">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {u.name?.[0]?.toUpperCase() || u.username?.[0]?.toUpperCase() || '?'}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">
+                        {u.name || u.username || 'Unknown'}
+                      </p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {u.phoneNumber || 'No phone'}
+                        {isOnline && ' • 🟢 Online'}
+                      </p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-white text-sm font-medium">{u.username}</p>
-                    <p className="text-xs text-gray-400">
-                      {u.onlineStatus ? '🟢 Online' : '⚪ Offline'}
-                    </p>
+
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {status === 'friend' ? (
+                      <span className="text-xs bg-green-600/30 text-green-400 px-3 py-1 rounded-full flex items-center gap-1">
+                        <Check size={14} /> Friend
+                      </span>
+                    ) : status === 'pending_sent' ? (
+                      <span className="text-xs bg-yellow-600/30 text-yellow-400 px-3 py-1 rounded-full">
+                        Pending
+                      </span>
+                    ) : status === 'pending_received' ? (
+                      <span className="text-xs bg-blue-600/30 text-blue-400 px-3 py-1 rounded-full">
+                        Request Received
+                      </span>
+                    ) : (
+                      <button
+                        onClick={() => sendRequest(u._id, u.name || u.username)}
+                        className="text-xs bg-whatsapp-green text-black px-3 py-1 rounded-full hover:opacity-90 flex items-center gap-1"
+                      >
+                        <UserPlus size={14} /> Add
+                      </button>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => sendRequest(u._id, u.username)}
-                  disabled={isFriend(u._id) || hasPendingRequest(u._id)}
-                  className={`text-xs px-3 py-1 rounded-full flex items-center gap-1 ${
-                    isFriend(u._id)
-                      ? 'bg-green-600/30 text-green-400 cursor-default'
-                      : hasPendingRequest(u._id)
-                      ? 'bg-yellow-600/30 text-yellow-400 cursor-default'
-                      : 'bg-whatsapp-green text-black hover:opacity-90'
-                  }`}
-                >
-                  {isFriend(u._id) ? (
-                    <Check size={14} />
-                  ) : hasPendingRequest(u._id) ? (
-                    'Pending'
-                  ) : (
-                    <UserPlus size={14} />
-                  )}
-                  {isFriend(u._id) ? 'Friend' : hasPendingRequest(u._id) ? 'Pending' : 'Add'}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -210,25 +248,27 @@ export default function AddFriends() {
               const sender = req.userId;
               return (
                 <div key={req._id} className="flex items-center justify-between py-2 border-b border-black/10 last:border-0">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-white font-semibold">
-                      {sender?.username?.[0]?.toUpperCase() || '?'}
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-full bg-yellow-600 flex items-center justify-center text-white font-semibold flex-shrink-0">
+                      {sender?.name?.[0]?.toUpperCase() || sender?.username?.[0]?.toUpperCase() || '?'}
                     </div>
-                    <div>
-                      <p className="text-white text-sm font-medium">{sender?.username || 'Unknown'}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white text-sm font-medium truncate">
+                        {sender?.name || sender?.username || 'Unknown'}
+                      </p>
                       <p className="text-xs text-yellow-400">⏳ Pending request</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-shrink-0">
                     <button
-                      onClick={() => acceptRequest(req._id, sender?.username)}
+                      onClick={() => acceptRequest(req._id, sender?.name || sender?.username)}
                       className="bg-whatsapp-green text-black p-1.5 rounded-full hover:opacity-90"
                       title="Accept"
                     >
                       <Check size={16} />
                     </button>
                     <button
-                      onClick={() => rejectRequest(req._id, sender?.username)}
+                      onClick={() => rejectRequest(req._id, sender?.name || sender?.username)}
                       className="bg-red-600 text-white p-1.5 rounded-full hover:opacity-90"
                       title="Reject"
                     >
@@ -251,45 +291,44 @@ export default function AddFriends() {
               No friends yet. Search and add someone! 😊
             </p>
           )}
-          {friends.map((f) => (
-            <div
-              key={f._id}
-              className="flex items-center justify-between py-2 border-b border-black/10 hover:bg-[#202c33] px-2 rounded-lg transition-colors cursor-pointer"
-              onClick={() => openChat(f._id)}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold">
-                  {f.username?.[0]?.toUpperCase() || '?'}
+          {friends.map((f) => {
+            const isOnline = !!onlineUsers[f._id];
+            return (
+              <div
+                key={f._id}
+                className="flex items-center justify-between py-2 border-b border-black/10 hover:bg-[#202c33] px-2 rounded-lg transition-colors"
+              >
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <div className="w-11 h-11 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold flex-shrink-0">
+                    {f.name?.[0]?.toUpperCase() || f.username?.[0]?.toUpperCase() || '?'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-white text-sm font-medium truncate">
+                      {f.name || f.username || 'Unknown'}
+                    </p>
+                    <p className="text-xs text-gray-400 truncate">
+                      {f.phoneNumber || 'No phone'}
+                      {isOnline && ' • 🟢 Online'}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-white text-sm font-medium">{f.username || 'Unknown'}</p>
-                  <p className="text-xs text-gray-400">
-                    {f.onlineStatus ? '🟢 Online' : '⚪ Offline'}
-                  </p>
+                <div className="flex gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => openChat(f._id)}
+                    className="text-xs bg-whatsapp-green text-black px-3 py-1 rounded-full hover:opacity-90 flex items-center gap-1"
+                  >
+                    <MessageCircle size={14} /> Chat
+                  </button>
+                  <button
+                    onClick={() => removeFriend(f._id, f.name || f.username)}
+                    className="text-xs bg-red-600/30 text-red-400 px-3 py-1 rounded-full hover:bg-red-600/50 flex items-center gap-1"
+                  >
+                    <UserMinus size={14} />
+                  </button>
                 </div>
               </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openChat(f._id);
-                  }}
-                  className="text-xs bg-whatsapp-green text-black px-3 py-1 rounded-full hover:opacity-90"
-                >
-                  💬 Chat
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    removeFriend(f._id, f.username);
-                  }}
-                  className="text-xs bg-red-600/30 text-red-400 px-3 py-1 rounded-full hover:bg-red-600/50"
-                >
-                  <UserMinus size={14} />
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>
