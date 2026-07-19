@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   User, Camera, Edit3, Lock, LogOut, Trash2, Phone,
   Eye, EyeOff, Clock, Palette, Download, FileText, Type,
-  SwitchAccount, ChevronRight, Moon, Sun, Circle, CheckCircle
+  Users, ChevronRight, Moon, Sun, Circle, CheckCircle
 } from 'lucide-react';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -552,7 +552,7 @@ function ChatSettings() {
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Switch Account</h2>
         <button className="w-full flex items-center gap-3 py-2 text-whatsapp-green">
-          <SwitchAccount size={18} />
+          <Users size={18} />
           <span>Add another account</span>
         </button>
       </div>
