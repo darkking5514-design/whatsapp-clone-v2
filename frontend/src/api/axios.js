@@ -10,6 +10,16 @@ console.log('🔌 API_BASE_URL:', API_BASE_URL);
 console.log('🔌 SOCKET_URL:', SOCKET_URL);
 
 // ============================================
+// HELPER: Get Full URL for images
+// ============================================
+export const getFullUrl = (path) => {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+  const baseUrl = import.meta.env.VITE_API_URL?.replace('/api', '') || 'https://whatsapp-clone-v2-production-3853.up.railway.app';
+  return `${baseUrl}${path}`;
+};
+
+// ============================================
 // AXIOS INSTANCE
 // ============================================
 const api = axios.create({

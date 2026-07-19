@@ -5,7 +5,7 @@ import {
   Eye, EyeOff, Clock, Palette, Download, FileText, Type,
   Users, ChevronRight, Moon, Sun, Circle, CheckCircle
 } from 'lucide-react';
-import api from '../api/axios';
+import api, { getFullUrl } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import Sidebar from '../components/Sidebar';
 
@@ -143,7 +143,6 @@ function AccountSettings({ profile, onLogout }) {
 
   return (
     <div className="space-y-4">
-      {/* Phone Number */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Phone Number</h2>
         <div className="flex items-center justify-between">
@@ -189,7 +188,6 @@ function AccountSettings({ profile, onLogout }) {
         )}
       </div>
 
-      {/* Security */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Security</h2>
         <button
@@ -228,7 +226,6 @@ function AccountSettings({ profile, onLogout }) {
         )}
       </div>
 
-      {/* Actions */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <button
           onClick={onLogout}
@@ -303,7 +300,11 @@ function ProfileSettings({ profile, setProfile }) {
         <div className="relative">
           <div className="w-24 h-24 rounded-full bg-whatsapp-teal flex items-center justify-center text-white font-semibold text-3xl overflow-hidden">
             {profile?.profilePic ? (
-              <img src={profile.profilePic} alt="Profile" className="w-full h-full object-cover" />
+              <img 
+                src={getFullUrl(profile.profilePic)} 
+                alt="Profile" 
+                className="w-full h-full object-cover" 
+              />
             ) : (
               profile?.name?.[0]?.toUpperCase() || '?'
             )}
@@ -330,7 +331,6 @@ function ProfileSettings({ profile, setProfile }) {
         )}
       </div>
 
-      {/* Name */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <label className="block text-xs text-gray-400 mb-1">Name</label>
         <input
@@ -341,7 +341,6 @@ function ProfileSettings({ profile, setProfile }) {
         />
       </div>
 
-      {/* Username */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <label className="block text-xs text-gray-400 mb-1">Username</label>
         <input
@@ -353,7 +352,6 @@ function ProfileSettings({ profile, setProfile }) {
         />
       </div>
 
-      {/* About */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <label className="block text-xs text-gray-400 mb-1">About</label>
         <textarea
@@ -453,7 +451,6 @@ function PrivacySettings({ profile, setProfile }) {
         </div>
       </div>
 
-      {/* Disappearing Messages */}
       <div className="bg-[#202c33] rounded-lg p-4">
         <h2 className="text-white font-medium mb-3">Disappearing Messages</h2>
         <div className="flex items-center justify-between">
