@@ -35,9 +35,8 @@ export default function GroupChat() {
   const bottomRef = useRef(null);
   const audioRefs = useRef({});
   const sendingRef = useRef(false);
-  const messagesEndRef = useRef(null);
 
-  // Voice recording
+  // Voice recording states
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState(null);
@@ -76,16 +75,19 @@ export default function GroupChat() {
     if (groupId) loadMessages();
   }, [groupId]);
 
-  // ---- Socket listener for new group messages ----
+  // ---- Socket listener for group messages ----
   useEffect(() => {
     if (!socket || !connected) return;
+
     const onGroupMessage = (message) => {
       if (message.groupId === groupId) {
         setMessages(prev => [...prev, message]);
         scrollToBottom();
       }
     };
+
     socket.on('receive_group_message', onGroupMessage);
+
     return () => {
       socket.off('receive_group_message', onGroupMessage);
     };
@@ -98,7 +100,7 @@ export default function GroupChat() {
     }, 100);
   };
 
-  // ---- Send message ----
+  // ---- Send group message ----
   const sendMessage = (payload) => {
     if (!socket || !connected) {
       console.error('Socket not connected');
@@ -120,11 +122,12 @@ export default function GroupChat() {
     socket.emit('send_group_message', data, (response) => {
       sendingRef.current = false;
       if (response?.success) {
-        setMessages(prev => [...prev, response.message]);
+        // ✅ Don't add message here – it will come via socket broadcast
+        // Just clear replyTo
         setReplyTo(null);
         scrollToBottom();
       } else {
-        console.error('Failed to send message:', response?.error);
+        console.error('Failed to send group message:', response?.error);
       }
     });
   };
@@ -138,7 +141,6 @@ export default function GroupChat() {
 
   const handleTextChange = (e) => {
     setText(e.target.value);
-    // Optional: emit typing indicator
   };
 
   // ---- File upload ----
@@ -164,7 +166,7 @@ export default function GroupChat() {
     }
   };
 
-  // ---- Voice recording ----
+  // ---- Voice Recording ----
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -239,7 +241,6 @@ export default function GroupChat() {
     }
   };
 
-  // ---- Audio playback ----
   const toggleAudioPlay = (messageId, url) => {
     if (audioPlaying === messageId) {
       audioRefs.current[messageId]?.pause();
@@ -275,9 +276,7 @@ export default function GroupChat() {
   };
 
   const handleDelete = (msg, deleteFor) => {
-    // For simplicity, delete for everyone (only if admin/owner)
-    if (!confirm('Delete this message?')) return;
-    // Emit socket event or API call – we'll just filter locally for now
+    // For now, filter locally
     setMessages(prev => prev.filter(m => m._id !== msg._id));
     setShowMessageMenu(null);
   };
@@ -362,12 +361,21 @@ export default function GroupChat() {
             <p className="text-gray-400 text-center mt-10 text-sm">No messages yet. Say hello! 👋</p>
           )}
           {messages.map((m) => {
-            const isSent = m.sender._id === user.id;
+            const isSent = m.sender?._id === user.id || m.sender === user.id;
+            const senderName = m.sender?.name || 'Unknown';
             const isReply = m.replyTo;
             const replyMsg = isReply ? messages.find(msg => msg._id === m.replyTo) : null;
+
             return (
               <div key={m._id} className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}>
                 <div className="relative max-w-[75%]">
+                  {/* Sender Name - Show for received messages only */}
+                  {!isSent && (
+                    <p className="text-xs text-whatsapp-green font-medium mb-1">
+                      {senderName}
+                    </p>
+                  )}
+
                   {isReply && replyMsg && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-400">
                       <p className="font-medium text-whatsapp-green">
@@ -378,6 +386,7 @@ export default function GroupChat() {
                       </p>
                     </div>
                   )}
+
                   <div className={`rounded-lg px-3 py-2 text-sm shadow ${
                     isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
                   }`}>
@@ -451,6 +460,7 @@ export default function GroupChat() {
                       </a>
                     )}
                     {m.content && <p className="whitespace-pre-wrap break-words">{m.content}</p>}
+
                     <div className="flex items-center justify-end gap-1 mt-1">
                       <span className="text-[10px] text-gray-300">
                         {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -460,6 +470,7 @@ export default function GroupChat() {
                         <Check size={16} className="text-gray-400" />)}
                     </div>
                   </div>
+
                   {/* Three-dot menu */}
                   <button
                     onClick={() => setShowMessageMenu(showMessageMenu === m._id ? null : m._id)}
@@ -499,7 +510,7 @@ export default function GroupChat() {
           <div ref={bottomRef} />
         </div>
 
-        {/* Input area */}
+        {/* Input Area */}
         <div className="bg-[#202c33] px-3 py-2 flex items-center gap-2 flex-shrink-0">
           <input
             type="file"
