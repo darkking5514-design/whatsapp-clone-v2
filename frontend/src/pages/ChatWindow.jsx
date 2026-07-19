@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Check, CheckCheck, Paperclip, Phone, Send, Video,
-  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause, Info
+  MoreVertical, Reply, Forward, Trash2, Download, X, Mic, Square, Play, Pause
 } from 'lucide-react';
 import api, { SOCKET_URL } from '../api/axios';
 import { useAuth } from '../context/AuthContext';
@@ -107,15 +107,12 @@ export default function ChatWindow() {
     const onReceiveMessage = (message) => {
       console.log('📩 Received message:', message);
       
-      // Get sender ID (handle populated sender object)
       const senderId = message.sender?._id || message.sender;
       const receiverId = message.receiver?._id || message.receiver;
 
-      // Check if message belongs to this chat
       if (senderId === otherUserId || receiverId === otherUserId) {
         setMessages((prev) => [...prev, message]);
 
-        // Mark as read if message is from other user
         if (senderId === otherUserId) {
           socket.emit('mark_read', {
             senderId: otherUserId,
@@ -314,20 +311,54 @@ export default function ChatWindow() {
     }
   };
 
+  // ---- Send Voice Message (Fixed) ----
   const sendVoiceMessage = async () => {
-    if (!audioBlob) return;
+    if (!audioBlob) {
+      console.error('❌ No audio blob to send');
+      return;
+    }
+
+    if (audioBlob.size === 0) {
+      console.error('❌ Audio blob is empty');
+      alert('Recording was empty. Please try again.');
+      return;
+    }
+
     setUploading(true);
     try {
       const duration = recordingTime;
-      const file = new File([audioBlob], `voice_${Date.now()}.webm`, { type: 'audio/webm' });
+      const file = new File([audioBlob], `voice_${Date.now()}.webm`, {
+        type: 'audio/webm',
+      });
+
+      console.log('📤 Uploading voice file:', {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      });
+
       const formData = new FormData();
       formData.append('media', file);
-      const res = await api.post('/messages/upload', formData);
-      sendMessage({ mediaUrl: res.data.mediaUrl, messageType: 'audio', content: '', duration });
+
+      const res = await api.post('/messages/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+
+      console.log('✅ Voice uploaded:', res.data);
+      sendMessage({
+        mediaUrl: res.data.mediaUrl,
+        messageType: 'audio',
+        content: '',
+        duration,
+      });
+
       setAudioBlob(null);
       setAudioURL('');
+      setRecordingTime(0);
     } catch (err) {
-      console.error('Voice upload failed:', err);
+      console.error('❌ Voice upload failed:', err);
+      console.error('📋 Response data:', err.response?.data);
+      alert('Failed to send voice message. Please try again.');
     } finally {
       setUploading(false);
     }
@@ -491,20 +522,17 @@ export default function ChatWindow() {
               );
             }
 
-            // Handle populated sender object
             const senderId = m.sender?._id || m.sender;
             const isSent = senderId === user.id;
             const isReply = m.replyTo;
             const isForwarded = m.forwarded;
             const replyMessage = isReply ? messages.find((msg) => msg._id === m.replyTo) : null;
 
-            // Skip if not for this chat
             if (senderId !== user.id && senderId !== otherUserId) return null;
 
             return (
               <div key={m._id} className={`flex ${isSent ? 'justify-end' : 'justify-start'} group`}>
                 <div className="relative max-w-[75%]">
-                  {/* Status Reply Quote */}
                   {m.statusReply && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-300">
                       <p className="font-medium text-whatsapp-green">
@@ -518,7 +546,6 @@ export default function ChatWindow() {
                     </div>
                   )}
 
-                  {/* Regular Reply Preview */}
                   {isReply && replyMessage && !replyMessage.deleted && (
                     <div className="border-l-2 border-whatsapp-green pl-2 mb-1 text-xs text-gray-400">
                       <p className="font-medium text-whatsapp-green">
@@ -539,7 +566,6 @@ export default function ChatWindow() {
                       isSent ? 'bg-whatsapp-bubbleSent text-white' : 'bg-whatsapp-bubbleReceived text-white'
                     }`}
                   >
-                    {/* Image */}
                     {m.messageType === 'image' && m.mediaUrl && (
                       <div className="relative group/image">
                         <img
@@ -557,7 +583,6 @@ export default function ChatWindow() {
                       </div>
                     )}
 
-                    {/* Video */}
                     {m.messageType === 'video' && m.mediaUrl && (
                       <div className="relative group/video">
                         <video src={`${SOCKET_URL}${m.mediaUrl}`} controls className="rounded-md mb-1 max-h-64" />
@@ -571,7 +596,6 @@ export default function ChatWindow() {
                       </div>
                     )}
 
-                    {/* File */}
                     {m.messageType === 'file' && m.mediaUrl && (
                       <a
                         href={`${SOCKET_URL}${m.mediaUrl}`}
@@ -583,7 +607,6 @@ export default function ChatWindow() {
                       </a>
                     )}
 
-                    {/* Voice Message */}
                     {m.messageType === 'audio' && m.mediaUrl && (
                       <div className="flex items-center gap-3 min-w-[160px]">
                         <button

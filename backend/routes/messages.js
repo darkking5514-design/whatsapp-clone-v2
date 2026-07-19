@@ -14,7 +14,6 @@ router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
 
     console.log(`🔍 Fetching messages between: ${userId} and ${otherUserId}`);
 
-    // Validate IDs
     if (!userId || !otherUserId || userId === 'undefined' || otherUserId === 'undefined') {
       console.log('❌ Invalid user IDs');
       return res.status(400).json({
@@ -23,7 +22,6 @@ router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
       });
     }
 
-    // Validate ObjectId format (24 hex chars)
     const isValidObjectId = (id) => /^[0-9a-fA-F]{24}$/.test(id);
     if (!isValidObjectId(userId) || !isValidObjectId(otherUserId)) {
       console.log('❌ Invalid ObjectId format');
@@ -33,13 +31,11 @@ router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
       });
     }
 
-    // Get messages between two users
     const messages = await Message.find({
       $or: [
         { sender: userId, receiver: otherUserId },
         { sender: otherUserId, receiver: userId },
       ],
-      // Don't show messages deleted for current user
       deletedFor: { $ne: userId },
     }).sort({ timestamp: 1 });
 
@@ -56,79 +52,63 @@ router.get('/:userId/:otherUserId', authMiddleware, async (req, res) => {
 });
 
 // ============================================
-// UPLOAD MEDIA (Image, Video, Audio, File)
+// UPLOAD MEDIA – DIRECT MULTER APPROACH
 // ============================================
-router.post('/upload', authMiddleware, (req, res) => {
-  console.log('📥 Upload request received');
-  console.log('📋 Content-Type:', req.headers['content-type']);
-  console.log('📋 User ID:', req.userId);
+router.post('/upload', authMiddleware, upload.single('media'), async (req, res) => {
+  try {
+    console.log('📥 Upload request received');
+    console.log('📋 Content-Type:', req.headers['content-type']);
+    console.log('📋 User ID:', req.userId);
 
-  upload.single('media')(req, res, async (err) => {
-    // Handle multer errors
-    if (err) {
-      console.error('❌ Multer error:', err);
-      console.error('📋 Error details:', err.message);
+    if (!req.file) {
+      console.error('❌ No file uploaded');
       return res.status(400).json({
         success: false,
-        message: err.message || 'File upload failed',
+        message: 'No file uploaded',
       });
     }
 
-    try {
-      // Check if file was uploaded
-      if (!req.file) {
-        console.error('❌ No file uploaded');
-        return res.status(400).json({
-          success: false,
-          message: 'No file uploaded',
-        });
-      }
-
-      // Check file size
-      if (req.file.size === 0) {
-        console.error('❌ File is empty');
-        return res.status(400).json({
-          success: false,
-          message: 'File is empty',
-        });
-      }
-
-      // Log file details
-      console.log('📁 File uploaded successfully:');
-      console.log('📋 Filename:', req.file.filename);
-      console.log('📋 Original name:', req.file.originalname);
-      console.log('📋 Size:', req.file.size, 'bytes');
-      console.log('📋 MIME type:', req.file.mimetype);
-
-      const mediaUrl = `/uploads/${req.file.filename}`;
-      console.log('📋 Media URL:', mediaUrl);
-
-      res.json({
-        success: true,
-        mediaUrl: mediaUrl,
-        filename: req.file.filename,
-        size: req.file.size,
-        mimetype: req.file.mimetype,
-      });
-
-    } catch (error) {
-      console.error('❌ Upload error:', error.message);
-      res.status(500).json({
+    if (req.file.size === 0) {
+      console.error('❌ File is empty');
+      return res.status(400).json({
         success: false,
-        message: 'Server error during upload',
-        error: error.message,
+        message: 'File is empty',
       });
     }
-  });
+
+    console.log('📁 File uploaded successfully:');
+    console.log('📋 Filename:', req.file.filename);
+    console.log('📋 Original name:', req.file.originalname);
+    console.log('📋 Size:', req.file.size, 'bytes');
+    console.log('📋 MIME type:', req.file.mimetype);
+
+    const mediaUrl = `/uploads/${req.file.filename}`;
+
+    res.json({
+      success: true,
+      mediaUrl: mediaUrl,
+      filename: req.file.filename,
+      size: req.file.size,
+      mimetype: req.file.mimetype,
+    });
+
+  } catch (error) {
+    console.error('❌ Upload error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Server error during upload',
+      error: error.message,
+    });
+  }
 });
 
 // ============================================
-// DELETE MESSAGE (For everyone or for me)
+// DELETE MESSAGE
 // ============================================
 router.delete('/:messageId', authMiddleware, async (req, res) => {
   try {
     const { messageId } = req.params;
-    const { deleteFor } = req.query; // 'everyone' or 'me'
+    const { deleteFor } = req.query;
 
     console.log(`🗑️ Deleting message ${messageId} for ${deleteFor}`);
 
@@ -137,18 +117,15 @@ router.delete('/:messageId', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Message not found' });
     }
 
-    // Check if user is sender
     if (message.sender.toString() !== req.userId) {
       return res.status(403).json({ success: false, message: 'Not authorized' });
     }
 
     if (deleteFor === 'everyone') {
-      // Delete for everyone - mark as deleted
       message.deleted = true;
       await message.save();
       return res.json({ success: true, message: 'Message deleted for everyone' });
     } else {
-      // Delete for me only
       if (!message.deletedFor.includes(req.userId)) {
         message.deletedFor.push(req.userId);
         await message.save();
@@ -177,7 +154,6 @@ router.post('/forward', authMiddleware, async (req, res) => {
       return res.status(404).json({ success: false, message: 'Message not found' });
     }
 
-    // Create forwarded messages for each receiver
     const forwardedMessages = [];
     for (const receiverId of receiverIds) {
       const newMessage = new Message({
