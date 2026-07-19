@@ -52,6 +52,7 @@ export default function Sidebar() {
             <span className="hidden sm:block">Friends</span>
           </NavLink>
 
+          {/* 👇 Settings Link – YEH ADD KAREIN */}
           <NavLink to="/settings" className={linkClass}>
             <Settings size={22} />
             <span className="hidden sm:block">Settings</span>
